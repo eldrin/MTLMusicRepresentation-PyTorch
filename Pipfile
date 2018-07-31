@@ -18,6 +18,10 @@ tensorboardx = "*"
 fire = "*"
 tensorflow = "*"
 librosa = "*"
+prefetch-generator = "*"
+
+[scripts]
+extract = "sh scripts/run_feat_ext.sh"
 
 [requires]
 python_version = "3.5"

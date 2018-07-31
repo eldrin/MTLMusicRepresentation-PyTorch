@@ -6,6 +6,7 @@
     "scaler_fn":"./data/sclr_dbmel.dat.gz",
     "on_mem":true,
     "is_gpu":true,
+    "save_every":10,
     "out_root":"./data/artist_ss/",
     "experiments":[
         {

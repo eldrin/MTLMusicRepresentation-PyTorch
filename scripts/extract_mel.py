@@ -1,6 +1,10 @@
 #!/usr/bin/python
 import os
 from os.path import join
+import sys
+# add repo root to the system path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 import pickle as pkl
 import argparse
 from multiprocessing import Pool
@@ -11,14 +15,13 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 import librosa
 import numpy as np
+
+from musmtl.utils import extract_mel
+
 from tqdm import tqdm
 
 # NOTE: make sure export where MSD songs located
 MSDROOT = os.environ['MSDROOT']
-SR = 22050
-N_FFT = 1024
-HOP_LEN = 256
-MONO = False
 N_WORKERS = 2
 
 # setup arg parser
@@ -45,18 +48,8 @@ def _ext_mel(tid):
     
     if os.path.exists(out_fn):
         return
-    
-    y, sr = librosa.load(in_fn, sr=SR, mono=False)
-    if y.ndim == 1:
-        print('[Warning] "{}" only has 1 channel. making psuedo 2-channels...'
-              .format(tid))
-        y = np.vstack([y, y])
 
-    Y = librosa.amplitude_to_db(np.array([
-        librosa.feature.melspectrogram(
-            ch, sr=sr, n_fft=N_FFT, hop_length=HOP_LEN)
-        for ch in y
-    ])).astype(np.float32)
+    Y = extract_mel(in_fn)
     
     # (1, 2, steps, bins)
     np.save(out_fn, Y.transpose(0, 2, 1)[None])
