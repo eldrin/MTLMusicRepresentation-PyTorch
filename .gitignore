@@ -1,0 +1,10 @@
+# files
+*.pyc
+*.lock
+*.swp
+
+# directories
+runs/
+data/
+.ipynb_checkpoints/
+
