@@ -130,14 +130,11 @@ class VGGlikeMTL(nn.Module):
     def forward(self, X, task):
         """"""
         if task == 'self':
-            X_l = self.shared(X[0])
-            X_l = self.branches_feature[self._task2idx[task]](X_l)
-            X_r = self.shared(X[1])
-            X_r = self.branches_feature[self._task2idx[task]](X_r)
+            X_l = self.feature(X[0], task)
+            X_r = self.feature(X[1], task)
             X = torch.cat([X_l, X_r], dim=-1)
         else:
-            X = self.shared(X)
-            X = self.branches_feature[self._task2idx[task]](X)          
+            X = self.feature(X, task)
 
         return self.branches_infer[self._task2idx[task]](X)
         
@@ -154,15 +151,15 @@ class ConvBlock2d(nn.Module):
                               conv_kernel, stride=conv_stride,
                               padding=conv_kernel // 2)
         self.bn = nn.BatchNorm2d(out_channel)
-    
+
     def forward(self, X):
         """"""
         X = F.relu(self.bn(self.conv(X)))
         if self.pool_size is not None:
             X = F.max_pool2d(X, self.pool_size)
         return X
-    
-    
+
+
 class GlobalAveragePool(nn.Module):
     """ Simple GAP layer for ease of Net building
     """
@@ -181,11 +178,17 @@ class SpecStandardScaler(nn.Module):
         """
         super(SpecStandardScaler, self).__init__()        
         self.mu = nn.Parameter(
-            torch.from_numpy(mean)[None, None, None, :].float())
+            torch.from_numpy(mean)[None, None, None, :].float(),
+            requires_grad=False
+        )
         
-        self.sigma = nn.Parameter(torch.max(
-            torch.from_numpy(std).float(), torch.FloatTensor([eps])
-        )[None, None, None, :])
+        self.sigma = nn.Parameter(
+            torch.max(
+                torch.from_numpy(std).float(),
+                torch.FloatTensor([eps])
+            )[None, None, None, :],
+            requires_grad=False
+        )
         
     def forward(self, X):
         """"""

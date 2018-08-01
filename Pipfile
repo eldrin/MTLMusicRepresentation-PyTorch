@@ -19,6 +19,7 @@ fire = "*"
 tensorflow = "*"
 librosa = "*"
 prefetch-generator = "*"
+matplotlib = "*"
 
 [scripts]
 extract = "sh scripts/run_feat_ext.sh"

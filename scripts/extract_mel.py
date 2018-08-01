@@ -7,16 +7,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import pickle as pkl
 import argparse
-from multiprocessing import Pool
 import warnings
 # TEMPORARY SOLUTION
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
-import librosa
 import numpy as np
 
-from musmtl.utils import extract_mel
+from musmtl.utils import extract_mel, parmap
 
 from tqdm import tqdm
 
@@ -29,6 +27,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("tid2fn", help='map between MSD tid => fn (.pkl)')
 parser.add_argument("candidates", help='text file containing target candidate tids')
 parser.add_argument("outroot", help='output root where all the mel-spec saved')
+parser.add_argument("--workers", type=int, default=N_WORKERS,
+                    help='number of workers doing the job')
 args = parser.parse_args()
 
 # load MSD tid => fn map
@@ -38,28 +38,21 @@ tid2fn = pkl.load(open(args.tid2fn, 'rb'))
 # read candidates
 print('2. Loading candidates...')
 with open(args.candidates) as f:
-    tids = [l.replace('\n', '') for l in f.readlines()]
+    tids = [l.replace('\n', '') for l in f]
 
 # helper
-def _ext_mel(tid):
+def _ext_mel(tid, overwrite=True):
     """"""
     in_fn = join(MSDROOT, tid2fn[tid])
     out_fn = join(args.outroot, tid + '.npy')
     
-    if os.path.exists(out_fn):
+    if os.path.exists(out_fn) and not overwrite:
         return
 
-    Y = extract_mel(in_fn)
-    
-    # (1, 2, steps, bins)
-    np.save(out_fn, Y.transpose(0, 2, 1)[None])
+    Y = extract_mel(in_fn)  # (n_ch, steps, bins)
+    Y = Y[None]  # (1, n_ch, steps, bins)
+    np.save(out_fn, Y)
 
 # process
 print('3. Process & saving...')
-if N_WORKERS == 1:
-    [_ext_mel(tid) for tid in tqdm(tids, total=len(tids), ncols=80)]
-else:
-    with Pool(processes=N_WORKERS) as p:
-        with tqdm(total=len(tids), ncols=80) as pbar:
-            for _ in p.imap_unordered(_ext_mel, tids):
-                pbar.update()
+parmap(_ext_mel, tids, n_workers=N_WORKERS, verbose=True)

@@ -1,10 +1,18 @@
 from os.path import join, dirname, basename
 import shutil
 import pickle as pkl
+from multiprocessing import Pool
+
+# TEMPORARY SOLUTION
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 import numpy as np
 import torch
 import librosa
+from tqdm import tqdm
+
 from .config import Config as cfg
 
 
@@ -47,10 +55,30 @@ def extract_mel(fn, verbose=False):
                   'making psuedo 2-channels...')
         y = np.vstack([y, y])
 
-    Y = librosa.amplitude_to_db(np.array([
+    Y = librosa.power_to_db(np.array([
         librosa.feature.melspectrogram(
             ch, sr=sr, n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN).T
         for ch in y
     ])).astype(np.float32)  # (2, t, 128)
 
     return Y  # (2, t, 128)
+
+
+def parmap(func, iterable, n_workers=2, verbose=False):
+    """ Simple Implementation for Parallel Map """
+    
+    if n_workers == 1:
+        if verbose:
+            iterable = tqdm(iterable, total=len(iterable), ncols=80)
+        return map(func, iterable)
+    else:
+        with Pool(processes=n_workers) as p:
+            if verbose:
+                with tqdm(total=len(iterable), ncols=80) as pbar:
+                    output = []
+                    for o in p.imap_unordered(func, iterable):
+                        output.append(o)
+                        pbar.update()
+                return output
+            else:
+                return p.imap_unordered(func, iterable)

@@ -31,7 +31,7 @@ class Trainer(object):
     """ Model trainer """
     def __init__(self, train_dataset, tasks, branch_at, scaler_fn,
                  out_root, in_fn=None, learn_rate=0.0001, n_epoches=100,
-                 batch_sz=48, valid_dataset=None, 
+                 batch_sz=48, valid_dataset=None, save_every=None,
                  report_every=100, is_gpu=True, name=None, **kwargs):
         """
         Args:
@@ -55,41 +55,48 @@ class Trainer(object):
         """
         self.tasks = tasks
         self.branch_at = branch_at
+
         self.learn_rate = learn_rate
         self.batch_sz = batch_sz
         self.n_epoches = n_epoches
         self.report_every = report_every
-        self.in_fn = in_fn
+        self.save_every = save_every
+        
+        self.scaler_fn = scaler_fn
+        
         self.is_gpu = is_gpu
+        self.in_fn = in_fn
         self.out_root = out_root
         # prepare dir
         if not os.path.exists(self.out_root):
             os.mkdir(self.out_root)
-        
-        # initialize tb-logger        
+
+        # initialize tb-logger
         if name is None:
             self.logger = SummaryWriter()
             self.name = ''
         else:
             self.logger = SummaryWriter('runs/{}'.format(name))
             self.name = name
-        
+
         # initialize the dataset
         self.train_dataset = train_dataset
         if valid_dataset is not None:
             self.valid_dataset = valid_dataset
-            
+
         self.n_batches = int(len(self.train_dataset.tids) / self.batch_sz) + 1
         self.n_batches *= len(tasks)
-        
+
         # initialize the models
         sclr = joblib.load(scaler_fn)
         self.scaler = SpecStandardScaler(sclr.mean_, sclr.scale_)
         self.model = VGGlikeMTL(tasks, branch_at)
-        
+
         # initialize optimizer
         ops = OrderedDict([
-            ('shared', optim.Adam(self.model.shared.parameters(), lr=learn_rate))
+            ('shared', optim.Adam(
+                self.model.shared.parameters(),
+                lr = learn_rate / len(self.tasks)))
         ])
         for task in tasks:
             feat_net = self.model.branches_feature[self.model._task2idx[task]]
@@ -103,22 +110,29 @@ class Trainer(object):
                 }   
             )
         self.opt = MultipleOptimizerDict(**ops)
-        
+
         # setup loss
-        # self.criterion = F.kl_div
-        self.criterion = categorical_crossentropy
+        self.criterion = F.kl_div
+        # self.criterion = categorical_crossentropy
         
         if self.is_gpu:
             self.model.cuda()
             self.scaler.cuda()
-        
+
     def fit(self):
         """"""
-        best_accv = 10000.
-        iters = 0
+        self.iters = 0
+        self.epoch = 0
         try:
             for n in trange(self.n_epoches, ncols=80):
+                self.epoch = n
                 self.model.train()
+                
+                # per-epoch checkpoint
+                if ((self.save_every is not None) and 
+                    (self.epoch % self.save_every == 0)):
+                    self._validate()
+
                 for _ in trange(self.n_batches, ncols=80):
                     # pick task & indices
                     task = np.random.choice(self.tasks)
@@ -131,53 +145,33 @@ class Trainer(object):
                     # update the model
                     self.opt.zero_grad()
                     X = self.scaler(X)
-                    y_pred = self.model.forward(X, task)
+                    y_pred = self.model(X, task)
                     l = self.criterion(
                         F.log_softmax(y_pred, dim=1), y)
                     l.backward()
                     self.opt.step(['shared', task])
-                    iters += 1
+                    self.iters += 1
 
-                    if (iters % self.report_every == 0 and 
+                    # runtime checkpoint
+                    if (self.iters % self.report_every == 0 and 
                             hasattr(self, 'valid_dataset')):
-                        self.model.eval()  # toggle to evaluation mode
-                        # training
-                        self.logger.add_scalar('tloss/{}'.format(task), 
-                                               l[0], iters)
-                        # validation
-                        for task in self.tasks:
-                            idx = np.random.choice(
-                                len(self.valid_dataset.tids), self.batch_sz, False)
-                            # draw data
-                            X, y = self._draw_samples(idx, task, 'valid')
-                            X = self.scaler(X)
-                            y_pred = self.model.forward(X, task)
-                            l = self.criterion(F.log_softmax(y_pred, dim=1), y)
-                            self.logger.add_scalar('vloss/{}'.format(task), 
-                                                   l[0], iters)
-                        # save checkpoint
-                        if (l.data < best_accv).all():
-                            is_best = True
-                            best_accv = float(l.data.cpu().numpy()
-                                              if self.is_gpu
-                                              else l.data.numpy())
-                        else:
-                            is_best = False
-                        save_checkpoint(
-                            {'iters': iters,
-                            'state_dict': self.model.state_dict(),
-                            'optimizer': self.opt.state_dict()},
-                            is_best,
-                            join(self.out_root ,
-                                 '{}_checkpoint.pth.tar'.format(self.name))
-                        )
 
-                        # toggle to training mode
-                        self.model.train()
+                        # training log
+                        self.logger.add_scalar(
+                            'tloss/{}'.format(task), l[0], self.iters)
+
+                        # validation
+                        if self.save_every is not None:
+                            self._validate(save=False)
+                        else:
+                            self._validate()
                         
         except KeyboardInterrupt:
             print('[Warning] User stopped the training!')
-
+        
+        finally:
+            # for the case where the training accidentally break
+            self._validate()
             
     def _draw_samples(self, idx, task, dset='train'):
         """"""
@@ -197,10 +191,52 @@ class Trainer(object):
             X, y = X.cuda(), y.cuda()
             
         return X, y
-
     
+    def _validate(self, save=True):
+        """"""
+        self.model.eval()  # toggle to evaluation mode
+        
+        # validation
+        for task in self.tasks:
+            idx = np.random.choice(
+                len(self.valid_dataset.tids), self.batch_sz, False)
+            
+            # draw data
+            X, y = self._draw_samples(idx, task, 'valid')
+            
+            # forward
+            X = self.scaler(X)
+            y_pred = self.model(X, task)
+            l = self.criterion(F.log_softmax(y_pred, dim=1), y)
+            
+            # logging
+            self.logger.add_scalar('vloss/{}'.format(task), 
+                                   l[0], self.iters)       
+        if save:
+            if self.save_every is not None:
+                out_fn = ('{}_checkpoint_it{:d}.pth.tar'
+                          .format(self.name, self.epoch))
+            else:
+                out_fn = ('{}_checkpoint.pth.tar'
+                          .format(self.name))
+
+            save_checkpoint(
+                {'iters': self.iters,
+                 'tasks': self.tasks,
+                 'branch_at': self.branch_at,
+                 'scaler_fn': self.scaler_fn,
+                 'state_dict': self.model.state_dict(),
+                 'optimizer': self.opt.state_dict()},
+                False,  # we don't care best model
+                join(self.out_root , out_fn)
+            )
+
+        # toggle to training mode
+        self.model.train()   
+        
+        
 def categorical_crossentropy(input, target):
-    """ Categorical Crossentropy Op
+    """ Categorical Crossentropy Op for probability input
     
     Args:
         input (torch.tensor): log probability over classes (N x C)
