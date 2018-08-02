@@ -22,38 +22,42 @@ class Experiment:
         self.config = config
         if not exists(abspath(self.config['out_root'])):
             os.mkdir(abspath(self.config['out_root']))
-        
+
         # load datasets
         print('Load training dataset')
         self.train_dataset = MSDMelDataset(
-            self.config['mel_root'], self.config['train_melpaths_fn'],
-            self.config['label_fn'], on_mem=self.config['on_mem'],
+            config['mel_root'], config['train_melpaths_fn'],
+            config['label_fn'], on_mem=config['on_mem'],
             transform=ToVariable())
-        
-        if ('valid_melpaths_fn' in self.config and 
-                os.path.exists(self.config['valid_melpaths_fn'])):
-            
+
+        if ('valid_melpaths_fn' in config and
+                os.path.exists(config['valid_melpaths_fn'])):
+
             print('Load validation dataset')
             self.valid_dataset = MSDMelDataset(
-                self.config['mel_root'], self.config['valid_melpaths_fn'],
-                self.config['label_fn'], on_mem=self.config['on_mem'],
+                config['mel_root'], config['valid_melpaths_fn'],
+                config['label_fn'], on_mem=config['on_mem'],
                 transform=ToVariable())
         else:
             self.valid_dataset = None
-        
+
+        # override some setup if provided
+        lr = config['learn_rate'] if 'learn_rate' in config else cfg.LEARN_RATE
+        nepo = config['n_epoches'] if 'n_epoches' in config else cfg.N_EPOCHES
+        bsz = config['batch_sz'] if 'batch_sz' in config else cfg.BATCH_SZ
+        l2 = config['l2'] if 'l2' in config else cfg.L2
+
         # setup custom trainer class with global setup
         self.Trainer = partial(
             Trainer,
             train_dataset = self.train_dataset,
             valid_dataset = self.valid_dataset,
-            learn_rate = cfg.LEARN_RATE,
-            n_epoches = cfg.N_EPOCHES,
-            batch_sz = cfg.BATCH_SZ,
-            l2 = cfg.L2,
-            save_every = self.config['save_every'],
-            scaler_fn = self.config['scaler_fn'],
-            out_root = self.config['out_root'],
-            is_gpu = self.config['is_gpu'],
+            learn_rate = lr, n_epoches = nepo,
+            batch_sz = bsz, l2 = l2,
+            save_every = config['save_every'],
+            scaler_fn = config['scaler_fn'],
+            out_root = config['out_root'],
+            is_gpu = config['is_gpu'],
         )
 
     def run(self):
@@ -62,7 +66,7 @@ class Experiment:
             print('Starting experiment: {} ({:d}/{:d})'.format(
                 setup['name'], i, len(self.config['experiments'])))
             setup['name'] = '.'.join([self.config['name'], setup['name']])
-            
+
             # instantiate trainer & run
             trainer = self.Trainer(**setup)
             trainer.fit()
