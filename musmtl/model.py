@@ -8,6 +8,13 @@ from torch.autograd import Variable
 VALID_TASKS = {
     'self_', 'bpm', 'year', 'tag', 'taste', 'cdr', 'lyrics', 'artist'
 }
+VALID_FUSION = {
+    'null'  # MSS-CR
+    '2',    # MS-CR@2
+    '4',    # MS-CR@4
+    '6',    # MS-CR@6
+    'fc'    # MS-SR@FC
+}
 
 
 class VGGlikeMTL(nn.Module):
@@ -18,11 +25,11 @@ class VGGlikeMTL(nn.Module):
         Args:
             tasks (list of str): involved tasks
             branch_at (str): point where the network branches
-                             ({'2', '4', '6', 'fc'})
+                             ({'null, '2', '4', '6', 'fc'})
         """
         super(VGGlikeMTL, self).__init__()
         assert all([task.lower() in VALID_TASKS for task in tasks])
-        assert branch_at in {'2', '4', '6', 'fc'}
+        assert branch_at in VALID_FUSION
         
         # build network
         self._build_net(tasks, branch_at)
@@ -54,41 +61,54 @@ class VGGlikeMTL(nn.Module):
     
     def _build_shared(self, branch_at):
         """"""
-        shared = [ConvBlock2d(2, 16, 5, conv_stride=(2, 1), pool_size=2)]
-        if branch_at == '2':
-            return shared  # (batch_sz, 16, 54, 64)
-        
-        elif branch_at == '4':
-            shared.append(ConvBlock2d(16, 32, 3))
-            shared.append(ConvBlock2d(32, 64, 3))
-            return shared  # (batch_sz, 64, 13, 16)
-    
-        elif branch_at == '6':
-            shared.append(ConvBlock2d(16, 32, 3))
-            shared.append(ConvBlock2d(32, 64, 3))
-            shared.append(ConvBlock2d(64, 64, 3))
-            shared.append(ConvBlock2d(64, 128, 3))
-            return shared  # (batch_sz, 128, 3, 4)
-            
-        elif branch_at == 'fc':
-            shared.append(ConvBlock2d(16, 32, 3))
-            shared.append(ConvBlock2d(32, 64, 3))
-            shared.append(ConvBlock2d(64, 64, 3))
-            shared.append(ConvBlock2d(64, 128, 3))
-            shared.append(ConvBlock2d(128, 256, 3, pool_size=None))
-            shared.append(ConvBlock2d(256, 256, 1, pool_size=None))
-            shared.append(GlobalAveragePool())
-            shared.append(nn.Linear(256, 256))
-            shared.append(nn.BatchNorm1d(256))
-            shared.append(nn.ReLU())
-            shared.append(nn.Dropout())
-            return shared  # (batch_sz, 256)
+        if branch_at != 'null':
+            shared = [ConvBlock2d(2, 16, 5, conv_stride=(2, 1), pool_size=2)]
+            if branch_at == '2':
+                return shared  # (batch_sz, 16, 54, 64)
+
+            elif branch_at == '4':
+                shared.append(ConvBlock2d(16, 32, 3))
+                shared.append(ConvBlock2d(32, 64, 3))
+                return shared  # (batch_sz, 64, 13, 16)
+
+            elif branch_at == '6':
+                shared.append(ConvBlock2d(16, 32, 3))
+                shared.append(ConvBlock2d(32, 64, 3))
+                shared.append(ConvBlock2d(64, 64, 3))
+                shared.append(ConvBlock2d(64, 128, 3))
+                return shared  # (batch_sz, 128, 3, 4)
+
+            elif branch_at == 'fc':
+                shared.append(ConvBlock2d(16, 32, 3))
+                shared.append(ConvBlock2d(32, 64, 3))
+                shared.append(ConvBlock2d(64, 64, 3))
+                shared.append(ConvBlock2d(64, 128, 3))
+                shared.append(ConvBlock2d(128, 256, 3, pool_size=None))
+                shared.append(ConvBlock2d(256, 256, 1, pool_size=None))
+                shared.append(GlobalAveragePool())
+                shared.append(nn.Linear(256, 256))
+                shared.append(nn.BatchNorm1d(256))
+                shared.append(nn.ReLU())
+                shared.append(nn.Dropout())
+                return shared  # (batch_sz, 256)
+        else:
+            return []  # no-sharing
         
     def _build_branch(self, task, branch_at):
         """"""
+        # build feature part
         branch = []
         if branch_at != 'fc':
-            if branch_at == '2':
+            if branch_at == 'null': # MSS-CR (null) : full branching
+                branch.append(ConvBlock2d(2, 16, 5, 
+                                          conv_stride=(2, 1),
+                                          pool_size=2))
+                branch.append(ConvBlock2d(16, 32, 3))
+                branch.append(ConvBlock2d(32, 64, 3))
+                branch.append(ConvBlock2d(64, 64, 3))
+                branch.append(ConvBlock2d(64, 128, 3))
+
+            elif branch_at == '2':
                 branch.append(ConvBlock2d(16, 32, 3))
                 branch.append(ConvBlock2d(32, 64, 3))
                 branch.append(ConvBlock2d(64, 64, 3))
@@ -98,7 +118,6 @@ class VGGlikeMTL(nn.Module):
                 branch.append(ConvBlock2d(64, 64, 3))
                 branch.append(ConvBlock2d(64, 128, 3))
 
-            # branch_at == '6'
             branch.append(ConvBlock2d(128, 256, 3, pool_size=None))
             branch.append(ConvBlock2d(256, 256, 1, pool_size=None))
             branch.append(GlobalAveragePool())
@@ -106,7 +125,8 @@ class VGGlikeMTL(nn.Module):
             branch.append(nn.BatchNorm1d(256))
             branch.append(nn.ReLU())
             branch.append(nn.Dropout())
-        
+
+        # build inference part
         branch_infer = []
         if task == 'self_':
             branch_infer.append(nn.Linear(512, 128))
@@ -116,9 +136,9 @@ class VGGlikeMTL(nn.Module):
             branch_infer.append(nn.Linear(128, 2))
         else:
             branch_infer.append(nn.Linear(256, 50))
-            
+
         return branch, branch_infer
-    
+
     def feature(self, X, task):
         """"""
         # TODO: check there's no explicit control flow for this

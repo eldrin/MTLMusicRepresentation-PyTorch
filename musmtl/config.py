@@ -8,6 +8,6 @@ class Config:
     N_STEPS = 216  # number time steps (corresponding to 2.5 sec with current setup)
     N_BINS = 128  # number of mel bins
     L2 = 1e-6  # L2 regularization coefficient
-    LEARN_RATE = 0.0001  # learning rate for ADAM optimizer
+    LEARN_RATE = 0.001  # learning rate for ADAM optimizer
     N_EPOCHES = 1000  # number of epoches
-    BATCH_SZ = 48  # batch size
+    BATCH_SZ = 256  # batch size
