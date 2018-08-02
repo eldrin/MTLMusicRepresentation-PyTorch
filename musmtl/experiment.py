@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 from .data import MSDMelDataset, ToVariable
 from .train import Trainer
+from .config import Config as cfg
 
 
 class Experiment:
@@ -25,16 +26,18 @@ class Experiment:
         # load datasets
         print('Load training dataset')
         self.train_dataset = MSDMelDataset(
-            self.config['train_melpaths_fn'], self.config['label_fn'],
-            on_mem=self.config['on_mem'], transform=ToVariable())
+            self.config['mel_root'], self.config['train_melpaths_fn'],
+            self.config['label_fn'], on_mem=self.config['on_mem'],
+            transform=ToVariable())
         
         if ('valid_melpaths_fn' in self.config and 
                 os.path.exists(self.config['valid_melpaths_fn'])):
             
             print('Load validation dataset')
             self.valid_dataset = MSDMelDataset(
-                self.config['valid_melpaths_fn'], self.config['label_fn'],
-                on_mem=self.config['on_mem'], transform=ToVariable())
+                self.config['mel_root'], self.config['valid_melpaths_fn'],
+                self.config['label_fn'], on_mem=self.config['on_mem'],
+                transform=ToVariable())
         else:
             self.valid_dataset = None
         
@@ -43,10 +46,10 @@ class Experiment:
             Trainer,
             train_dataset = self.train_dataset,
             valid_dataset = self.valid_dataset,
-            learn_rate = self.config['learn_rate'],
-            n_epoches = self.config['n_epoches'],
-            batch_sz = self.config['batch_sz'],
-            l2 = self.config['l2'],
+            learn_rate = cfg.LEARN_RATE,
+            n_epoches = cfg.N_EPOCHES,
+            batch_sz = cfg.BATCH_SZ,
+            l2 = cfg.L2,
             save_every = self.config['save_every'],
             scaler_fn = self.config['scaler_fn'],
             out_root = self.config['out_root'],

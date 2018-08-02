@@ -19,11 +19,11 @@ from musmtl.utils import extract_mel, parmap
 from tqdm import tqdm
 
 # NOTE: make sure export where MSD songs located
-MSDROOT = os.environ['MSDROOT']
 N_WORKERS = 2
 
 # setup arg parser
 parser = argparse.ArgumentParser()
+parser.add_argument("songsroot", help='root where the all MSD .mp3 located')
 parser.add_argument("tid2fn", help='map between MSD tid => fn (.pkl)')
 parser.add_argument("candidates", help='text file containing target candidate tids')
 parser.add_argument("outroot", help='output root where all the mel-spec saved')
@@ -43,7 +43,7 @@ with open(args.candidates) as f:
 # helper
 def _ext_mel(tid, overwrite=True):
     """"""
-    in_fn = join(MSDROOT, tid2fn[tid])
+    in_fn = join(args.songsroot, tid2fn[tid])
     out_fn = join(args.outroot, tid + '.npy')
     
     if os.path.exists(out_fn) and not overwrite:

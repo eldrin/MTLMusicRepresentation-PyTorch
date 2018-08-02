@@ -20,7 +20,7 @@ from .utils import load_pickle
 
 class MSDMelDataset(Dataset):
     """ mel-spectrogram dataset of the subset of Million Song Dataset """
-    def __init__(self, melpaths_fn, label_fn, crop_len=216, 
+    def __init__(self, mel_root, tids_fn, label_fn, crop_len=216,
                  on_mem=True, transform=None):
         """
         Args:
@@ -33,8 +33,9 @@ class MSDMelDataset(Dataset):
         # : melpaths is 
         # : dictionary of tid: melspec (1, 2, t, 128)
         self.on_mem = on_mem
-        with open(melpaths_fn) as f:
-            melpaths = [line.replace('\n', '') for line in f.readlines()]
+        with open(tids_fn) as f:
+            melpaths = [join(mel_root, line.replace('\n', ''))
+                        for line in f.readlines()]
         
         tids = []
         if self.on_mem:

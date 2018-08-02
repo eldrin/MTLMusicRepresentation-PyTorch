@@ -4,14 +4,11 @@
     "valid_melpaths_fn":"./data/valid_fns.txt",
     "label_fn":"/mnt/msd/meta_data/ALL.pkl",
     "scaler_fn":"./data/sclr_dbmel.dat.gz",
+    "mel_root":"/mnt/msdmel2/",    
+    "out_root":"./data/ss0/",
     "on_mem":true,
     "is_gpu":true,
     "save_every":10,
-    "out_root":"./data/ss0/",
-    "l2":1e-6,
-    "learn_rate":0.0001,
-    "n_epoches":1000,
-    "batch_sz":48,
     "experiments":[
         {
             "name":"year_ss_0",
