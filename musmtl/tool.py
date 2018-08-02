@@ -38,10 +38,10 @@ class FeatureExtractor(object):
         
         # load checkpoint to the model
         checkpoint = torch.load(model_checkpoint)
-        self.model = VGGlikeMTL(
-            checkpoint['tasks'],
-            checkpoint['branch_at']
-        ).load_state_dict(checkpoint['state_dict']).eval()
+        self.model = VGGlikeMTL(checkpoint['tasks'],
+                                checkpoint['branch_at'])
+        self.model.load_state_dict(checkpoint['state_dict'])
+        self.model.eval()
         
         # initialize scaler
         sclr_ = joblib.load(checkpoint['scaler_fn'])
@@ -68,10 +68,12 @@ class FeatureExtractor(object):
                     axis=1
                 ).astype(np.float32)  # (2, t, 128)
 
-            y = y.transpose(0, 2, 1)[None]  # (1, 2, t, 128)
-            
             # re-organize it to have (N, 2, 216, 128)
-            Y = y.reshape(-1, cfg.N_CH, cfg.N_STEPS, cfg.N_BINS)
+            Y = np.concatenate(
+                [y[j].reshape(-1, cfg.N_STEPS, cfg.N_BINS)[:, None]
+                 for j in range(cfg.N_CH)],
+                axis=1
+            )
             Y = Variable(torch.from_numpy(Y).float())
             
             if self.is_gpu:

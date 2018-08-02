@@ -31,7 +31,7 @@ class Trainer(object):
     """ Model trainer """
     def __init__(self, train_dataset, tasks, branch_at, scaler_fn,
                  out_root, in_fn=None, learn_rate=0.0001, n_epoches=100,
-                 batch_sz=48, valid_dataset=None, save_every=None,
+                 batch_sz=48, l2=1e-6, valid_dataset=None, save_every=None,
                  report_every=100, is_gpu=True, name=None, **kwargs):
         """
         Args:
@@ -47,6 +47,7 @@ class Trainer(object):
             learn_rate (float): learning rate for Adam optimizer
             n_epochs (int): number of epoches for training
             batch_sz (int): number of samplers per batch
+            l2 (float): coefficient for L2 regularization on weight
             valid_dataset (MSDMelDataset, optional): validation dataset instance
             on_mem (bool): flag whether the data loaded on memory or not
             report_every (int): frequency for evaluation
@@ -59,6 +60,8 @@ class Trainer(object):
         self.learn_rate = learn_rate
         self.batch_sz = batch_sz
         self.n_epoches = n_epoches
+        self.l2 = l2
+        
         self.report_every = report_every
         self.save_every = save_every
         
@@ -96,7 +99,8 @@ class Trainer(object):
         ops = OrderedDict([
             ('shared', optim.Adam(
                 self.model.shared.parameters(),
-                lr = learn_rate / len(self.tasks)))
+                lr = self.learn_rate / len(self.tasks),
+                weight_decay = self.l2))
         ])
         for task in tasks:
             feat_net = self.model.branches_feature[self.model._task2idx[task]]
@@ -105,7 +109,8 @@ class Trainer(object):
                 {
                     task: optim.Adam(
                         chain(feat_net.parameters(), inf_net.parameters()),
-                        lr = learn_rate
+                        lr = self.learn_rate,
+                        weight_decay = self.l2
                     )
                 }   
             )

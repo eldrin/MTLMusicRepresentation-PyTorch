@@ -150,6 +150,7 @@ class ConvBlock2d(nn.Module):
         self.conv = nn.Conv2d(in_channel, out_channel,
                               conv_kernel, stride=conv_stride,
                               padding=conv_kernel // 2)
+        torch.nn.init.xavier_uniform(self.conv.weight)  # Glorot uniform
         self.bn = nn.BatchNorm2d(out_channel)
 
     def forward(self, X):

@@ -31,7 +31,7 @@ if not exists(args.outroot):
 def _process(line):
     """"""
     # assuming it's tab separated (i.e. idx\tfn\tlabel)
-    idx, fn, label = line.replace('\n', '').split('\tab')
+    idx, fn, label = line.replace('\n', '').split('\t')
     out_fn = join(args.outroot, '{:06d}.npy'.format(idx))
     Y = extract_mel(fn)  # (2, steps, bins)
     np.save(out_fn, Y)

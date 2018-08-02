@@ -1,13 +1,13 @@
 {
-    "name":"test_self",
+    "name":"test",
     "train_melpaths_fn":"./data/train_fns.txt",
     "valid_melpaths_fn":"./data/valid_fns.txt",
     "label_fn":"/mnt/msd/meta_data/ALL.pkl",
     "scaler_fn":"./data/sclr_dbmel.dat.gz",
-    "on_mem":false,
+    "on_mem":true,
     "is_gpu":true,
     "save_every":10,
-    "out_root":"./data/self_ss/",
+    "out_root":"./data/artist_ss/",
     "l2":1e-6,
     "learn_rate":0.0001,
     "n_epoches":100,
@@ -16,6 +16,11 @@
         {
             "name":"self_ss_0",
             "tasks":["self"],
+            "branch_at":"2"
+        },
+        {
+            "name":"artist_ss_0",
+            "tasks":["artist"],
             "branch_at":"2"
         }
     ]

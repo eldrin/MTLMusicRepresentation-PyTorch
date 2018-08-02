@@ -9,7 +9,6 @@ import numpy as np
 from musmtl.tool import FeatureExtractor
 from musmtl.utils import extract_mel, parmap
 
-
 # setup arg parser
 parser = argparse.ArgumentParser()
 parser.add_argument("model_checkpoint", help='path to model checkpoint file (.pth.gz)')
