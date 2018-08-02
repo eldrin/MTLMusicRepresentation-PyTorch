@@ -67,6 +67,7 @@ class MSDMelDataset(Dataset):
         
         # make hash for tids
         self.i_tids = dict(enumerate(self.tids))
+        self.tids_i = {v:k for k, v in self.i_tids.items()}
         
         self.transform = transform
         self.crop_len = crop_len
@@ -85,7 +86,7 @@ class MSDMelDataset(Dataset):
         # random cropping
         x_ = self._crop_mel(x)
 
-        if task == 'self':
+        if task == 'self_':
             # generate ((X_l, X_r), y_self)
             X_l = x_
             y_self_ = np.random.randint(2)
@@ -135,7 +136,7 @@ class MSDMelDataset(Dataset):
         neg_idx = np.random.choice(self.tids)
         while neg_idx == tid:
             neg_idx = np.random.choice(self.tids)
-        return neg_idx
+        return self.tids_i[neg_idx]
     
     
 class ToVariable(object):

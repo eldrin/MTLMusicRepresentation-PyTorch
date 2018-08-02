@@ -7,20 +7,20 @@
     "on_mem":true,
     "is_gpu":true,
     "save_every":10,
-    "out_root":"./data/artist_ss/",
+    "out_root":"./data/ss0/",
     "l2":1e-6,
     "learn_rate":0.0001,
-    "n_epoches":100,
+    "n_epoches":1000,
     "batch_sz":48,
     "experiments":[
         {
-            "name":"self_ss_0",
-            "tasks":["self"],
+            "name":"year_ss_0",
+            "tasks":["year"],
             "branch_at":"2"
         },
         {
-            "name":"artist_ss_0",
-            "tasks":["artist"],
+            "name":"tag_ss_0",
+            "tasks":["tag"],
             "branch_at":"2"
         }
     ]

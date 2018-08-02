@@ -37,7 +37,7 @@ class Trainer(object):
         Args:
             train_dataset (MSDMelDataset): training dataset instance
             tasks (list of str): involved tasks
-                    ({'self', 'year', 'bpm', 'tag', 'taste', 'cdr', 'artist'})
+                    ({'self_', 'year', 'bpm', 'tag', 'taste', 'cdr', 'artist'})
             branch_at (str): point where the network branches
                              ({'2', '4', '6', 'fc'})
             scaler_fn (str): path to saved sklearn.preprocessing.StandardScaler
@@ -149,7 +149,6 @@ class Trainer(object):
 
                     # update the model
                     self.opt.zero_grad()
-                    X = self.scaler(X)
                     y_pred = self.model(X, task)
                     l = self.criterion(
                         F.log_softmax(y_pred, dim=1), y)
@@ -184,18 +183,31 @@ class Trainer(object):
             dataset = self.train_dataset
         else:
             dataset = self.valid_dataset
+
         X, y = [], []
         for i in idx:
             sample = self.train_dataset[i, task]
             X.append(sample['mel'])
             y.append(sample['label'][None, :])
-        X = torch.cat(X, dim=0)
+                
         y = torch.cat(y, dim=0)
         
-        if self.is_gpu:
-            X, y = X.cuda(), y.cuda()
-            
-        return X, y
+        if task == 'self_':
+            X_l = torch.cat([x[0] for x in X], dim=0)
+            X_r = torch.cat([x[1] for x in X], dim=0)            
+            if self.is_gpu:
+                X_l, X_r, y = X_l.cuda(), X_r.cuda(), y.cuda()
+            # scaling
+            X_l, X_r = self.scaler(X_l), self.scaler(X_r)
+            return (X_l, X_r), y
+
+        else:
+            X = torch.cat(X, dim=0)
+            if self.is_gpu:
+                X, y = X.cuda(), y.cuda()
+            # scaling
+            X = self.scaler(X)
+            return X, y
     
     def _validate(self, save=True):
         """"""
@@ -210,7 +222,6 @@ class Trainer(object):
             X, y = self._draw_samples(idx, task, 'valid')
             
             # forward
-            X = self.scaler(X)
             y_pred = self.model(X, task)
             l = self.criterion(F.log_softmax(y_pred, dim=1), y)
             

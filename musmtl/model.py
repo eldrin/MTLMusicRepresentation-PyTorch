@@ -6,7 +6,7 @@ from torch.autograd import Variable
 
 
 VALID_TASKS = {
-    'self', 'bpm', 'year', 'tag', 'taste', 'cdr', 'lyrics', 'artist'
+    'self_', 'bpm', 'year', 'tag', 'taste', 'cdr', 'lyrics', 'artist'
 }
 
 
@@ -108,7 +108,7 @@ class VGGlikeMTL(nn.Module):
             branch.append(nn.Dropout())
         
         branch_infer = []
-        if task == 'self':
+        if task == 'self_':
             branch_infer.append(nn.Linear(512, 128))
             branch_infer.append(nn.BatchNorm1d(128))
             branch_infer.append(nn.ReLU())
@@ -129,7 +129,7 @@ class VGGlikeMTL(nn.Module):
     
     def forward(self, X, task):
         """"""
-        if task == 'self':
+        if task == 'self_':
             X_l = self.feature(X[0], task)
             X_r = self.feature(X[1], task)
             X = torch.cat([X_l, X_r], dim=-1)
