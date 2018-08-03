@@ -9,7 +9,7 @@ VALID_TASKS = {
     'self_', 'bpm', 'year', 'tag', 'taste', 'cdr', 'lyrics', 'artist'
 }
 VALID_FUSION = {
-    'null'  # MSS-CR
+    'null',  # MSS-CR
     '2',    # MS-CR@2
     '4',    # MS-CR@4
     '6',    # MS-CR@6
