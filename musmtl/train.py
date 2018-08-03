@@ -62,12 +62,12 @@ class Trainer(object):
         self.batch_sz = batch_sz
         self.n_epoches = n_epoches
         self.l2 = l2
-        
+
         self.report_every = report_every
         self.save_every = save_every
-        
+
         self.scaler_fn = scaler_fn
-        
+
         self.is_gpu = is_gpu
         self.in_fn = in_fn
         self.out_root = out_root
@@ -94,13 +94,14 @@ class Trainer(object):
         # initialize the models
         sclr = joblib.load(scaler_fn)
         self.scaler = SpecStandardScaler(sclr.mean_, sclr.scale_)
-        
         self.model = VGGlikeMTL(tasks, branch_at)
-        
+
         # multi-gpu
         if torch.cuda.device_count() > 1:
             self.model = nn.DataParallel(self.model)
             self.multi_gpu = True
+            print('[Info] Using {:d} gpus!'.format(
+                torch.cuda.device_count()))
         else:
             self.multi_gpu = False
 
