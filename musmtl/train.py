@@ -96,12 +96,17 @@ class Trainer(object):
         self.model = VGGlikeMTL(tasks, branch_at)
 
         # initialize optimizer
-        ops = OrderedDict([
-            ('shared', optim.Adam(
-                self.model.shared.parameters(),
-                lr = self.learn_rate / len(self.tasks),
-                weight_decay = self.l2))
-        ])
+        ops = OrderedDict()
+        if branch_at != 'null':
+            ops.update(
+                {
+                    'shared': optim.Adam(
+                        self.model.shared.parameters(),
+                        lr = self.learn_rate / len(self.tasks),
+                        weight_decay = self.l2)
+                }
+            )
+
         for task in tasks:
             feat_net = self.model.branches_feature[self.model._task2idx[task]]
             inf_net = self.model.branches_infer[self.model._task2idx[task]]
@@ -110,9 +115,8 @@ class Trainer(object):
                     task: optim.Adam(
                         chain(feat_net.parameters(), inf_net.parameters()),
                         lr = self.learn_rate,
-                        weight_decay = self.l2
-                    )
-                }   
+                        weight_decay = self.l2)
+                }
             )
         self.opt = MultipleOptimizerDict(**ops)
 

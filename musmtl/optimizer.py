@@ -30,7 +30,8 @@ class MultipleOptimizerDict:
 
     def step(self, keys):
         for key in keys:
-            self.optimizers[key].step()
+            if key in self.optimizers:
+                self.optimizers[key].step()
             
     def state_dict(self):
         return {k: v.state_dict() for k, v in self.optimizers.items()}
