@@ -6,7 +6,7 @@ from torch.autograd import Variable
 
 
 VALID_TASKS = {
-    'self_', 'bpm', 'year', 'tag', 'taste', 'cdr', 'lyrics', 'artist'
+    'self_', 'bpm', 'year', 'tag', 'taste', 'cdr_tag', 'lyrics', 'artist'
 }
 VALID_FUSION = {
     'null',  # MSS-CR
