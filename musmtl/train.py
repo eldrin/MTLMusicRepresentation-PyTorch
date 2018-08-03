@@ -94,7 +94,15 @@ class Trainer(object):
         # initialize the models
         sclr = joblib.load(scaler_fn)
         self.scaler = SpecStandardScaler(sclr.mean_, sclr.scale_)
+        
         self.model = VGGlikeMTL(tasks, branch_at)
+        
+        # multi-gpu
+        if torch.cuda.device_count() > 1:
+            self.model = nn.DataParallel(self.model)
+            self.multi_gpu = True
+        else:
+            self.multi_gpu = False
 
         # initialize optimizer
         ops = OrderedDict()
@@ -257,12 +265,17 @@ class Trainer(object):
                 out_fn = ('{}_checkpoint.pth.tar'
                           .format(self.name))
 
+            if self.multi_gpu:
+                model_state = self.model.module.state_dict()
+            else:
+                model_state = self.model.state_dict()
+                
             save_checkpoint(
                 {'iters': self.iters,
                  'tasks': self.tasks,
                  'branch_at': self.branch_at,
                  'scaler_fn': self.scaler_fn,
-                 'state_dict': self.model.state_dict(),
+                 'state_dict': model_state,
                  'optimizer': self.opt.state_dict()},
                 False,  # we don't care best model
                 join(self.out_root , out_fn)
