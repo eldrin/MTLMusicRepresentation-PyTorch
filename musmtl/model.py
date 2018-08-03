@@ -86,7 +86,7 @@ class VGGlikeMTL(nn.Module):
                 shared.append(ConvBlock2d(128, 256, 3, pool_size=None))
                 shared.append(ConvBlock2d(256, 256, 1, pool_size=None))
                 shared.append(GlobalAveragePool())
-                shared.append(nn.Linear(256, 256))
+                shared.append(linear_with_glorot_uniform(256, 256))
                 shared.append(nn.BatchNorm1d(256))
                 shared.append(nn.ReLU())
                 shared.append(nn.Dropout())
@@ -121,7 +121,7 @@ class VGGlikeMTL(nn.Module):
             branch.append(ConvBlock2d(128, 256, 3, pool_size=None))
             branch.append(ConvBlock2d(256, 256, 1, pool_size=None))
             branch.append(GlobalAveragePool())
-            branch.append(nn.Linear(256, 256))
+            branch.append(linear_with_glorot_uniform(256, 256))
             branch.append(nn.BatchNorm1d(256))
             branch.append(nn.ReLU())
             branch.append(nn.Dropout())
@@ -129,7 +129,7 @@ class VGGlikeMTL(nn.Module):
         # build inference part
         branch_infer = []
         if task == 'self_':
-            branch_infer.append(nn.Linear(512, 128))
+            branch_infer.append(linear_with_glorot_uniform(512, 128))
             branch_infer.append(nn.BatchNorm1d(128))
             branch_infer.append(nn.ReLU())
             branch_infer.append(nn.Dropout())
@@ -214,3 +214,10 @@ class SpecStandardScaler(nn.Module):
     def forward(self, X):
         """"""
         return (X - self.mu) / self.sigma
+
+
+def linear_with_glorot_uniform(f_in, f_out):
+    """"""
+    lin = nn.Linear(256, 256)
+    torch.nn.init.xavier_uniform(lin.weight)
+    return lin

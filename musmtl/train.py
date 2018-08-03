@@ -17,6 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
+from prefetch_generator import BackgroundGenerator, background
 
 from .model import VGGlikeMTL, SpecStandardScaler
 from .data import MSDMelDataset, ToVariable
@@ -142,15 +143,10 @@ class Trainer(object):
                     (self.epoch % self.save_every == 0)):
                     self._validate()
 
-                for _ in trange(self.n_batches, ncols=80):
-                    # pick task & indices
-                    task = np.random.choice(self.tasks)
-                    idx = np.random.choice(
-                        len(self.train_dataset.tids), self.batch_sz, False)
-
-                    # draw data
-                    X, y = self._draw_samples(idx, task, 'train')
-
+                for X, y, task in self._iter_batches():
+                    # pre-processing
+                    X, y = self._preprocess(X, y, task)
+                    
                     # update the model
                     self.opt.zero_grad()
                     y_pred = self.model(X, task)
@@ -180,39 +176,59 @@ class Trainer(object):
         finally:
             # for the case where the training accidentally break
             self._validate()
-            
+
     def _draw_samples(self, idx, task, dset='train'):
         """"""
         if dset == 'train':
             dataset = self.train_dataset
         else:
             dataset = self.valid_dataset
-
+        
         X, y = [], []
         for i in idx:
-            sample = self.train_dataset[i, task]
+            sample = dataset[i, task]
             X.append(sample['mel'])
             y.append(sample['label'][None, :])
-                
+
         y = torch.cat(y, dim=0)
         
         if task == 'self_':
             X_l = torch.cat([x[0] for x in X], dim=0)
             X_r = torch.cat([x[1] for x in X], dim=0)            
+            return (X_l, X_r), y
+
+        else:
+            X = torch.cat(X, dim=0)
+            return X, y
+
+    def _preprocess(self, X, y, task):
+        """"""
+        if task == 'self_':
+            X_l, X_r = X[0], X[1]
             if self.is_gpu:
                 X_l, X_r, y = X_l.cuda(), X_r.cuda(), y.cuda()
             # scaling
             X_l, X_r = self.scaler(X_l), self.scaler(X_r)
             return (X_l, X_r), y
-
         else:
-            X = torch.cat(X, dim=0)
             if self.is_gpu:
                 X, y = X.cuda(), y.cuda()
             # scaling
             X = self.scaler(X)
             return X, y
-    
+
+    @background(max_prefetch=5)
+    def _iter_batches(self):
+        """"""
+        for fn in trange(self.n_batches, ncols=80):
+            # pick task & indices
+            task = np.random.choice(self.tasks)
+            idx = np.random.choice(
+                len(self.train_dataset.tids), self.batch_sz, False)
+            # draw data
+            X, y = self._draw_samples(idx, task, 'train')
+            yield X, y, task
+
     def _validate(self, save=True):
         """"""
         self.model.eval()  # toggle to evaluation mode
@@ -224,6 +240,7 @@ class Trainer(object):
             
             # draw data
             X, y = self._draw_samples(idx, task, 'valid')
+            X, y = self._preprocess(X, y, task)
             
             # forward
             y_pred = self.model(X, task)
@@ -252,9 +269,9 @@ class Trainer(object):
             )
 
         # toggle to training mode
-        self.model.train()   
-        
-        
+        self.model.train()
+
+
 def categorical_crossentropy(input, target):
     """ Categorical Crossentropy Op for probability input
     
