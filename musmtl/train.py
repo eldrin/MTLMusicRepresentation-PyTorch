@@ -111,15 +111,24 @@ class Trainer(object):
             ops.update(
                 {
                     'shared': optim.Adam(
-                        self.model.shared.parameters(),
+                        (self.model.module.shared.parameters()
+                         if self.multi_gpu
+                         else self.model.shared.parameters()),
                         lr = self.learn_rate / len(self.tasks),
                         weight_decay = self.l2)
                 }
             )
 
         for task in tasks:
-            feat_net = self.model.branches_feature[self.model._task2idx[task]]
-            inf_net = self.model.branches_infer[self.model._task2idx[task]]
+            if self.multi_gpu:
+                task_i = self.model.module._task2idx[task]
+                feat_net = self.model.module.branches_feature[task_i]
+                inf_net = self.model.module.branches_infer[task_i]
+            else:
+                task_i = self.model._task2idx[task]
+                feat_net = self.model.branches_feature[task_i]
+                inf_net = self.model.branches_infer[task_i]
+
             ops.update(
                 {
                     task: optim.Adam(
