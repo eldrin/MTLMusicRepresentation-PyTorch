@@ -218,6 +218,6 @@ class SpecStandardScaler(nn.Module):
 
 def linear_with_glorot_uniform(f_in, f_out):
     """"""
-    lin = nn.Linear(256, 256)
+    lin = nn.Linear(f_in, f_out)
     torch.nn.init.xavier_uniform(lin.weight)
     return lin
