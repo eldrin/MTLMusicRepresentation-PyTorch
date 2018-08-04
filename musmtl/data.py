@@ -24,7 +24,7 @@ class MSDMelDataset(Dataset):
                  on_mem=True, transform=None):
         """
         Args:
-            melpaths_fn (str): path to the text file containing 
+            melpaths_fn (str): path to the text file containing
                                 candidate mel spectrograms (.npy)
             label_fn (str): path to label file (a dictionary contains all labels)
             transform (callable, optional): optional transform to be applied
@@ -36,7 +36,7 @@ class MSDMelDataset(Dataset):
         with open(tids_fn) as f:
             melpaths = [join(mel_root, line.replace('\n', ''))
                         for line in f.readlines()]
-        
+
         tids = []
         if self.on_mem:
             # pre-load all melspec on memory
@@ -59,29 +59,29 @@ class MSDMelDataset(Dataset):
         # : dictionary of dictionary (~700mb)
         # : each sub-dict contains tid: item_factor
         # : no self (should be generated dynamically)
-        self.labels = load_pickle(label_fn) 
-        
+        self.labels = load_pickle(label_fn)
+
         # get the intersection of tids between mel and labels
         self.tids = list(set(tids).intersection(
             set(six.next(six.itervalues(self.labels)).keys())
         ))
-        
+
         # make hash for tids
         self.i_tids = dict(enumerate(self.tids))
         self.tids_i = {v:k for k, v in self.i_tids.items()}
-        
+
         self.transform = transform
         self.crop_len = crop_len
 
     def __len__(self):
         """"""
         return len(self.i_tids)
-    
+
     def __getitem__(self, idx_task):
         """"""
         # unpack
         idx, task = idx_task
-        
+
         # retrieve mel spec
         x = self._load_mel(idx)
         # random cropping
@@ -97,19 +97,19 @@ class MSDMelDataset(Dataset):
                 y_self = np.array([0., 1.])
             else:
                 # select random negative sample
-                neg_idx = self._negative_sampling(self.i_tids[idx])
+                neg_idx = self._negative_sampling(idx)
                 X_r = self._load_mel(neg_idx)
                 X_r = self._crop_mel(X_r)
                 y_self = np.array([1., 0.])
 
             sample = {'mel': (X_l, X_r), 'label': y_self}
-        else:    
+        else:
             # retrive (X_t, z_t)            
             sample = {'mel': x_, 'label': self.labels[task][self.i_tids[idx]]}
-    
+
         if self.transform:
             sample = self.transform(sample)
-    
+
         return sample
 
     def _load_mel(self, idx):
@@ -119,7 +119,7 @@ class MSDMelDataset(Dataset):
             return self.mels[tid]
         else:
             return np.load(self.melpaths[tid], mmap_mode='r')
-            
+
     def _crop_mel(self, mel):
         """"""
         if mel.shape[2] >= self.crop_len:
@@ -132,14 +132,14 @@ class MSDMelDataset(Dataset):
             mel_[:, :, st_:st_+mel.shape[2]] = mel
             return mel_
 
-    def _negative_sampling(self, tid):
-        """""" 
-        neg_idx = np.random.choice(self.tids)
-        while neg_idx == tid:
-            neg_idx = np.random.choice(self.tids)
-        return self.tids_i[neg_idx]
-    
-    
+    def _negative_sampling(self, tid_i):
+        """"""
+        neg_idx = np.random.choice(len(self.i_tids))
+        while neg_idx == tid_i:
+            neg_idx = np.random.choice(len(self.i_tids))
+        return neg_idx
+
+
 class ToVariable(object):
     """ Convert ndarrays in sample in Variables. """
     def __call__(self, sample):
