@@ -70,11 +70,7 @@ class Trainer(object):
 
         self.is_gpu = is_gpu
         self.in_fn = in_fn
-        self.out_root = out_root
-        # prepare dir
-        if not os.path.exists(self.out_root):
-            os.mkdir(self.out_root)
-
+        
         # initialize tb-logger
         if name is None:
             self.logger = SummaryWriter()
@@ -82,6 +78,16 @@ class Trainer(object):
         else:
             self.logger = SummaryWriter('runs/{}'.format(name))
             self.name = name
+        
+        # setup dump locations
+        self.out_root = out_root         
+        self.run_out_root = join(self.out_root, self.name)
+
+        # prepare dirs
+        if not os.path.exists(self.out_root):
+            os.mkdir(self.out_root)
+        if not os.path.exists(self.run_out_root):
+            os.mkdir(self.run_out_root)
 
         # initialize the dataset
         self.train_dataset = train_dataset
@@ -288,7 +294,7 @@ class Trainer(object):
                  'state_dict': model_state,
                  'optimizer': self.opt.state_dict()},
                 False,  # we don't care best model
-                join(self.out_root , out_fn)
+                join(self.run_out_root , out_fn)
             )
 
         # toggle to training mode
