@@ -11,3 +11,4 @@ class Config:
     LEARN_RATE = 0.00025  # learning rate for ADAM optimizer
     N_EPOCHES = 200  # number of epoches
     BATCH_SZ = 128  # batch size
+    SAVE_LOC = 'localhost'  # location for saving checkpoints
