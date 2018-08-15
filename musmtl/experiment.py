@@ -20,8 +20,9 @@ class Experiment:
             config_fn (str): path to experiment configuration file
         """
         self.config = config
-        if not exists(abspath(self.config['out_root'])):
-            os.mkdir(abspath(self.config['out_root']))
+        if self.config['save_location'] == 'localhost':
+            if not exists(abspath(self.config['out_root'])):
+                os.mkdir(abspath(self.config['out_root']))
 
         # load datasets
         print('Load training dataset')
@@ -55,6 +56,7 @@ class Experiment:
             learn_rate = lr, n_epoches = nepo,
             batch_sz = bsz, l2 = l2,
             save_every = config['save_every'],
+            save_location = config['save_location'],
             scaler_fn = config['scaler_fn'],
             out_root = config['out_root'],
             is_gpu = config['is_gpu'],

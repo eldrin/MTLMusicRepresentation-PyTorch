@@ -1,5 +1,6 @@
 import os
-from os.path import join
+from os.path import join, basename, dirname
+import subprocess
 from collections import OrderedDict
 from itertools import chain
 import uuid
@@ -32,7 +33,8 @@ class Trainer(object):
     """ Model trainer """
     def __init__(self, train_dataset, tasks, branch_at, scaler_fn,
                  out_root, in_fn=None, learn_rate=0.0001, n_epoches=100,
-                 batch_sz=48, l2=1e-6, valid_dataset=None, save_every=None,
+                 batch_sz=48, l2=1e-6, valid_dataset=None,
+                 save_every=None, save_location='localhost',
                  report_every=100, is_gpu=True, name=None, **kwargs):
         """
         Args:
@@ -52,6 +54,10 @@ class Trainer(object):
             valid_dataset (MSDMelDataset, optional): validation dataset instance
             on_mem (bool): flag whether the data loaded on memory or not
             report_every (int): frequency for evaluation
+            save_every (int): frequency for checkpoint dumping
+            save_location (str): indicates whether root directory for the `out_root`
+                                 is local or network server
+                                 ({'localhost', '192.168.X.XXX', etc.})
             is_gpu (bool): flag whether gpu is used or not
             name (str): name for the experimental run. randomly generaged if not given
         """
@@ -65,12 +71,13 @@ class Trainer(object):
 
         self.report_every = report_every
         self.save_every = save_every
+        self.save_location = save_location
 
         self.scaler_fn = scaler_fn
 
         self.is_gpu = is_gpu
         self.in_fn = in_fn
-        
+
         # initialize tb-logger
         if name is None:
             self.logger = SummaryWriter()
@@ -78,16 +85,17 @@ class Trainer(object):
         else:
             self.logger = SummaryWriter('runs/{}'.format(name))
             self.name = name
-        
+
         # setup dump locations
-        self.out_root = out_root         
+        self.out_root = out_root
         self.run_out_root = join(self.out_root, self.name)
 
         # prepare dirs
-        if not os.path.exists(self.out_root):
-            os.mkdir(self.out_root)
-        if not os.path.exists(self.run_out_root):
-            os.mkdir(self.run_out_root)
+        if self.save_location == 'localhost':
+            if not os.path.exists(self.out_root):
+                os.mkdir(self.out_root)
+            if not os.path.exists(self.run_out_root):
+                os.mkdir(self.run_out_root)
 
         # initialize the dataset
         self.train_dataset = train_dataset
@@ -148,7 +156,7 @@ class Trainer(object):
         # setup loss
         self.criterion = F.kl_div
         # self.criterion = categorical_crossentropy
-        
+
         if self.is_gpu:
             self.model.cuda()
             self.scaler.cuda()
@@ -161,16 +169,16 @@ class Trainer(object):
             for n in trange(self.n_epoches, ncols=80):
                 self.epoch = n
                 self.model.train()
-                
+
                 # per-epoch checkpoint
-                if ((self.save_every is not None) and 
+                if ((self.save_every is not None) and
                     (self.epoch % self.save_every == 0)):
                     self._validate()
 
                 for X, y, task in self._iter_batches():
                     # pre-processing
                     X, y = self._preprocess(X, y, task)
-                    
+
                     # update the model
                     self.opt.zero_grad()
                     y_pred = self.model(X, task)
@@ -181,7 +189,7 @@ class Trainer(object):
                     self.iters += 1
 
                     # runtime checkpoint
-                    if (self.iters % self.report_every == 0 and 
+                    if (self.iters % self.report_every == 0 and
                             hasattr(self, 'valid_dataset')):
 
                         # training log
@@ -193,10 +201,10 @@ class Trainer(object):
                             self._validate(save=False)
                         else:
                             self._validate()
-                        
+
         except KeyboardInterrupt:
             print('[Warning] User stopped the training!')
-        
+
         finally:
             # for the case where the training accidentally break
             self._validate()
@@ -207,7 +215,7 @@ class Trainer(object):
             dataset = self.train_dataset
         else:
             dataset = self.valid_dataset
-        
+
         X, y = [], []
         for i in idx:
             sample = dataset[i, task]
@@ -215,10 +223,10 @@ class Trainer(object):
             y.append(sample['label'][None, :])
 
         y = torch.cat(y, dim=0)
-        
+
         if task == 'self_':
             X_l = torch.cat([x[0] for x in X], dim=0)
-            X_r = torch.cat([x[1] for x in X], dim=0)            
+            X_r = torch.cat([x[1] for x in X], dim=0)
             return (X_l, X_r), y
 
         else:
@@ -256,23 +264,23 @@ class Trainer(object):
     def _validate(self, save=True):
         """"""
         self.model.eval()  # toggle to evaluation mode
-        
+
         # validation
         for task in self.tasks:
             idx = np.random.choice(
                 len(self.valid_dataset.tids), self.batch_sz, False)
-            
+
             # draw data
             X, y = self._draw_samples(idx, task, 'valid')
             X, y = self._preprocess(X, y, task)
-            
+
             # forward
             y_pred = self.model(X, task)
             l = self.criterion(F.log_softmax(y_pred, dim=1), y)
-            
+
             # logging
-            self.logger.add_scalar('vloss/{}'.format(task), 
-                                   l[0], self.iters)       
+            self.logger.add_scalar('vloss/{}'.format(task),
+                                   l[0], self.iters)
         if save:
             if self.save_every is not None:
                 out_fn = ('{}_checkpoint_it{:d}.pth.tar'
@@ -285,17 +293,35 @@ class Trainer(object):
                 model_state = self.model.module.state_dict()
             else:
                 model_state = self.model.state_dict()
-                
-            save_checkpoint(
-                {'iters': self.iters,
-                 'tasks': self.tasks,
-                 'branch_at': self.branch_at,
-                 'scaler_fn': self.scaler_fn,
-                 'state_dict': model_state,
-                 'optimizer': self.opt.state_dict()},
-                False,  # we don't care best model
-                join(self.run_out_root , out_fn)
-            )
+
+            if self.save_location == 'localhost':
+                save_checkpoint(
+                    {'iters': self.iters,
+                     'tasks': self.tasks,
+                     'branch_at': self.branch_at,
+                     'scaler_fn': self.scaler_fn,
+                     'state_dict': model_state,
+                     'optimizer': self.opt.state_dict()},
+                    False,  # we don't care best model
+                    join(self.run_out_root , out_fn)
+                )
+            else:
+                # TODO: check if the desitnation is accessible and valid?
+                # (currently assuming it's always accessible and valid)
+                    save_checkpoint(
+                        {'iters': self.iters,
+                         'tasks': self.tasks,
+                         'branch_at': self.branch_at,
+                         'scaler_fn': self.scaler_fn,
+                         'state_dict': model_state,
+                         'optimizer': self.opt.state_dict()},
+                        False,  # we don't care best model
+                        out_fn
+                    )
+                    # send the file to the destination using scp
+                    dest = join(self.save_location, self.name) + '/'
+                    subprocess.call(['rsync', '-r', out_fn, dest])
+                    os.remove(out_fn)
 
         # toggle to training mode
         self.model.train()
@@ -303,7 +329,7 @@ class Trainer(object):
 
 def categorical_crossentropy(input, target):
     """ Categorical Crossentropy Op for probability input
-    
+
     Args:
         input (torch.tensor): log probability over classes (N x C)
         target (torch.tensor): linear probability over classes (N x C)
