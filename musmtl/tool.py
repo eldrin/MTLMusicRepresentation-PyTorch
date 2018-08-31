@@ -23,7 +23,17 @@ from .config import Config as cfg
 @background(max_prefetch=5)
 def _generate_mels(fns):
     for fn in tqdm(fns, ncols=80):
-        yield fn, extract_mel(fn)
+        try:
+            if os.path.splitext(fn)[-1] == '.npy':
+                y = np.load(fn)[0]
+            else:
+                y = extract_mel(fn)
+        except IOError as e:
+            print(e)
+        except Exception as e:
+            print(e)
+        else:
+            yield fn, y
         
 
 class FeatureExtractor(object):
@@ -37,7 +47,8 @@ class FeatureExtractor(object):
         self.is_gpu = is_gpu
         
         # load checkpoint to the model
-        checkpoint = torch.load(model_checkpoint)
+        checkpoint = torch.load(
+            model_checkpoint, map_location=lambda storage, loc: storage)
         self.model = VGGlikeMTL(checkpoint['tasks'],
                                 checkpoint['branch_at'])
         self.model.load_state_dict(checkpoint['state_dict'])
