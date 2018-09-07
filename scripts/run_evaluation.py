@@ -1,15 +1,17 @@
 import os
-from os.path import dirname, basename, join, exists
+from os.path import basename, dirname, join
 import sys
 # add repo root to the system path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import glob
 import argparse
+from tempfile import NamedTemporaryFile
+import subprocess
 
-from musmtl.evaluation import run
+from musmtl.evaluation import TASKKEY
 
-# setup arg parser
 parser = argparse.ArgumentParser()
-parser.add_argument("feature_fn", help='path to the feature file')
+parser.add_argument("feature_dir", help='path to the root of feature files')
 parser.add_argument("task",
                     help="""name of the task
                     {'eBallroom', 'FMA', 'GTZAN', 'IRMAS',
@@ -18,6 +20,7 @@ parser.add_argument("out_root", help='path to the dir where to save the result (
 parser.add_argument("--n-cv", type=int, default=5, help='number of split for validation')
 args = parser.parse_args()
 
-
-# run!
-run(args.feature_fn, args.task, args.out_root, args.n_cv)
+for fn in filter(lambda fn: TASKKEY[args.task] == basename(fn),
+                 glob.glob(join(args.feature_dir, '*/*.npy'))):
+    subprocess.call(['sbatch', './sbatchs/evaluate.sbatch',
+                     fn, args.task, args.out_root, str(args.n_cv)])

@@ -1,5 +1,5 @@
 import glob
-from os.path import join, dirname
+from os.path import join, dirname, basename
 from functools import partial
 
 import numpy as np
@@ -63,10 +63,10 @@ TASKMETRICS = {
 def load_data(fn, task):
     """"""
     assert task in TASKTYPE
-    
+
     # loading feature
     X = np.load(fn)
-    
+
     # loading targets
     if TASKTYPE[task] == 'recommendation':
         # triplet
@@ -89,7 +89,7 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
     else:
         train_ix = Y[Y[2].isin({'train', 'valid'})][0].values
         test_ix = Y[Y[2].isin({'test'})][0].values
-        
+
         for _ in range(n_cv):
             np.random.shuffle(train_ix)
             yield train_ix, test_ix
@@ -98,17 +98,22 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
 def run(feature_fn, task, out_root, n_cv=5):
     """"""
     assert task in TASKTYPE
-    
+
     result = []
-    id = dirname(feature_fn)
+    id = basename(dirname(feature_fn))
     out_fn = join(out_root, '{}_{}.csv'.format(id, task))
     X, Y = load_data(feature_fn, task)
 
-    for name, model in TASKMODELS[TASKTYPE[task]].items():
+    for name, Model in TASKMODELS[TASKTYPE[task]].items():
+
         if task != 'recommendation':
             y = Y[3].values
+            if task == 'regression':
+                y = y.astype(float)
+
             for train_ix, test_ix in split_generator(X, Y, n_cv):
-                model.fit(X[train_ix], y[train_ix])
+                # model initialization & training
+                model = Model().fit(X[train_ix], y[train_ix])
                 y_pred = model.predict(X[test_ix])
                 y_true = y[test_ix]
                 res = TASKMETRICS[TASKTYPE[task]](y_true, y_pred)
@@ -117,6 +122,6 @@ def run(feature_fn, task, out_root, n_cv=5):
                 result.append({'id': id, 'task': task, 'model': name, 'value': res,})
         else:
             raise NotImplementedError
-            
+
     # save
     pd.DataFrame(result).to_csv(out_fn, index=None)
