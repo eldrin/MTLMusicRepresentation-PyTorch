@@ -15,9 +15,12 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 from musmtl.utils import extract_mel, parmap
 
+N_WORKERS = 2
+
 # setup arg parser
 parser = argparse.ArgumentParser()
-parser.add_argument("info", help='a text file contains info on dataset (idx, path, label)')
+parser.add_argument("info", help='a text file contains info on dataset (idx, fn, split, label)')
+parser.add_argument("inroot", help='data input root')
 parser.add_argument("outroot", help='output root where all the processed saved')
 parser.add_argument("--workers", type=int, default=N_WORKERS,
                     help='number of workers doing the job')
@@ -30,11 +33,17 @@ if not exists(args.outroot):
 # helper
 def _process(line):
     """"""
-    # assuming it's tab separated (i.e. idx\tfn\tlabel)
-    idx, fn, label = line.replace('\n', '').split('\t')
-    out_fn = join(args.outroot, '{:06d}.npy'.format(idx))
-    Y = extract_mel(fn)  # (2, steps, bins)
-    np.save(out_fn, Y)
+    try:
+        # assuming it's tab separated (i.e. idx\tfn\tlabel)
+        idx, fn, split, label = line.replace('\n', '').split('\t')
+        if fn[0] == '/':
+            fn = fn[1:]
+        in_fn = join(args.inroot, fn)
+        out_fn = join(args.outroot, '{:06d}.npy'.format(int(idx)))
+        Y = extract_mel(in_fn)[None]  # (1, 2, steps, bins)
+        np.save(out_fn, Y)
+    except Exception as e:
+        print(e)
 
 # process
 with open(args.info) as f:
