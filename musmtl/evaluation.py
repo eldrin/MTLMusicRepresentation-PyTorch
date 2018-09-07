@@ -87,7 +87,7 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
         return StratifiedKFold(n_splits=n_cv, shuffle=True,
                                random_seed=random_seed).split(X, label)
     else:
-        train_ix = Y[Y[2].isin({'train','valid'})][0].values
+        train_ix = Y[Y[2].isin({'train', 'valid'})][0].values
         test_ix = Y[Y[2].isin({'test'})][0].values
         
         for _ in range(n_cv):
@@ -95,26 +95,28 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
             yield train_ix, test_ix
 
 
-def run(feature_fns, task, n_cv=5):
+def run(feature_fn, task, out_root, n_cv=5):
     """"""
+    assert task in TASKTYPE
+    
     result = []
-    
-    for fn in tqdm(feature_fn, total=len(feature_fn), ncols=80):
-        id = dirname(fn)
-        X, Y = load_data(fn, task)
-        
-        for name, model in TASKMODELS[TASKTYPE[task]].items():
-            if task != 'recommendation':
-                y = Y[3].values
-                for train_ix, test_ix in split_generator(X, Y, n_cv):
-                    model.fit(X[train_ix], y[train_ix])
-                    y_pred = model.predict(X[test_ix])
-                    y_true = y[test_ix]
-                    res = TASKMETRICS[TASKTYPE[task]](y_true, y_pred)
-                    
-                    # store
-                    result.append({'id': id, 'task': task, 'model': name, 'value': res,})
-            else:
-                raise NotImplementedError
-    
-    return result
+    id = dirname(feature_fn)
+    out_fn = join(out_root, '{}_{}.csv'.format(id, task))
+    X, Y = load_data(feature_fn, task)
+
+    for name, model in TASKMODELS[TASKTYPE[task]].items():
+        if task != 'recommendation':
+            y = Y[3].values
+            for train_ix, test_ix in split_generator(X, Y, n_cv):
+                model.fit(X[train_ix], y[train_ix])
+                y_pred = model.predict(X[test_ix])
+                y_true = y[test_ix]
+                res = TASKMETRICS[TASKTYPE[task]](y_true, y_pred)
+
+                # store
+                result.append({'id': id, 'task': task, 'model': name, 'value': res,})
+        else:
+            raise NotImplementedError
+            
+    # save
+    pd.DataFrame(result).to_csv(out_fn, index=None)
