@@ -13,6 +13,7 @@ from musmtl.utils import extract_mel, parmap
 # setup arg parser
 parser = argparse.ArgumentParser()
 parser.add_argument("model_checkpoints", help='path to file listing model checkpoint files (.txt)')
+parser.add_argument("scaler_fn", help='path to scaler model (.dat.gz)')
 parser.add_argument("target_audios", help='path to file listing target audio files (.txt)')
 parser.add_argument("out_root", help='filepath for the output')
 parser.add_argument("--is-gpu", type=bool, default=False,
@@ -36,7 +37,7 @@ print('Initiating worker...')
 ext = FeatureExtractor(args.target_audios, args.is_gpu)
 
 print('Processing...')
-for feature, fn in zip(ext.run(model_fns), model_fns):
+for feature, fn in zip(ext.run(model_fns, args.scaler_fn), model_fns):
 
     # get exp id
     ix = basename(fn).split('_')[0].split('.')[-1]

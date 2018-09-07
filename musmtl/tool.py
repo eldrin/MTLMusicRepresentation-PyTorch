@@ -50,18 +50,18 @@ class FeatureExtractor(object):
             self.mel_fns = [ll.replace('\n', '') for ll in f.readlines()]
 
     @staticmethod
-    def _load_model(fn, is_gpu):
+    def _load_model(model_fn, scaler_fn, is_gpu):
         """"""
         # load checkpoint to the model
         checkpoint = torch.load(
-            fn, map_location=lambda storage, loc: storage)
+            model_fn, map_location=lambda storage, loc: storage)
         model = VGGlikeMTL(checkpoint['tasks'],
                            checkpoint['branch_at'])
         model.load_state_dict(checkpoint['state_dict'])
         model.eval()
 
         # initialize scaler
-        sclr_ = joblib.load(checkpoint['scaler_fn'])
+        sclr_ = joblib.load(scaler_fn)
         scaler = SpecStandardScaler(sclr_.mean_, sclr_.scale_)
 
         if is_gpu:
@@ -111,7 +111,7 @@ class FeatureExtractor(object):
         z = np.r_[Y.mean(axis=0), Y.std(axis=0)]
         return z
 
-    def run(self, model_fns):
+    def run(self, model_fns, scaler_fn):
         """
         Args:
             model_fns (list of str): list of path to model checkpoint file (.pth.gz)
@@ -126,7 +126,7 @@ class FeatureExtractor(object):
             output = []
 
             # spawn model
-            scaler, model = self._load_model(model_fn, self.is_gpu)
+            scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
 
             # process
             for fn, x in X:
@@ -135,8 +135,3 @@ class FeatureExtractor(object):
                 output.append(z)
 
             yield np.array(output)  # (n x (d x m))
-
-        # # OLD WAY
-        # for fn, y in _generate_mels(self.fns):
-        #     output.append(z)
-        # return np.array(output)  # (n x (d x m))
