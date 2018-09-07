@@ -5,7 +5,7 @@
 
 # directories
 runs/
-data/
+./data/
 notebooks/
 .ipynb_checkpoints/
 
