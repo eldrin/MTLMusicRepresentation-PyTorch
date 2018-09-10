@@ -1,5 +1,5 @@
 import os
-from os.path import basename, dirname, join
+from os.path import basename, dirname, join, exists
 import sys
 # add repo root to the system path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -20,7 +20,10 @@ parser.add_argument("out_root", help='path to the dir where to save the result (
 parser.add_argument("--n-cv", type=int, default=5, help='number of split for validation')
 args = parser.parse_args()
 
-for fn in filter(lambda fn: TASKKEY[args.task] == basename(fn),
-                 glob.glob(join(args.feature_dir, '*/*.npy'))):
+for i, fn in enumerate(filter(lambda fn: TASKKEY[args.task] == basename(fn),
+                              glob.glob(join(args.feature_dir, '*/*.npy')))):
+    id = basename(dirname(fn))
+    if exists(join(args.out_root, '{}_{}.csv'.format(id, args.task))):
+        continue
     subprocess.call(['sbatch', './sbatchs/evaluate.sbatch',
                      fn, args.task, args.out_root, str(args.n_cv)])

@@ -4,9 +4,11 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.svm import LinearSVC, SVR
 from sklearn.model_selection import StratifiedKFold
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score, r2_score
 
 from tqdm import tqdm
@@ -46,10 +48,10 @@ TASKKEY = {
 }
 
 TASKMODELS = {
-    'classification': {'LinearSVC': LinearSVC,
-                       'MLPClassifier': partial(MLPClassifier, hidden_layer_sizes=(256, 256))},
-    'regression': {'SVR': SVR,
-                   'MLPRegressor': partial(MLPRegressor, hidden_layer_sizes=(256, 256))},
+    'classification': {'LinearSVC': [LinearSVC],
+                       'MLPClassifier': [partial(MLPClassifier, hidden_layer_sizes=(256, 256))]},
+    'regression': {'SVR': [StandardScaler, SVR],
+                   'MLPRegressor': [partial(MLPRegressor, hidden_layer_sizes=(256, 256))]},
     'recommendation': None  # wmfa (will be plugged in soon)
 }
 
@@ -84,15 +86,21 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
     if Y[2].isna().unique() == True:
         label = Y[3].values
         # returning generator
-        return StratifiedKFold(n_splits=n_cv, shuffle=True,
-                               random_seed=random_seed).split(X, label)
+        split_gen = StratifiedKFold(
+            n_splits=n_cv, shuffle=True,
+            random_state=random_seed
+        ).split(X, label)
     else:
         train_ix = Y[Y[2].isin({'train', 'valid'})][0].values
         test_ix = Y[Y[2].isin({'test'})][0].values
 
+        split_gen = []
         for _ in range(n_cv):
             np.random.shuffle(train_ix)
-            yield train_ix, test_ix
+            split_gen.append((train_ix, test_ix))
+
+    for train_ix, test_ix in split_gen:
+        yield train_ix, test_ix
 
 
 def run(feature_fn, task, out_root, n_cv=5):
@@ -104,7 +112,7 @@ def run(feature_fn, task, out_root, n_cv=5):
     out_fn = join(out_root, '{}_{}.csv'.format(id, task))
     X, Y = load_data(feature_fn, task)
 
-    for name, Model in TASKMODELS[TASKTYPE[task]].items():
+    for name, Models in TASKMODELS[TASKTYPE[task]].items():
 
         if task != 'recommendation':
             y = Y[3].values
@@ -113,7 +121,9 @@ def run(feature_fn, task, out_root, n_cv=5):
 
             for train_ix, test_ix in split_generator(X, Y, n_cv):
                 # model initialization & training
-                model = Model().fit(X[train_ix], y[train_ix])
+                pipes = [('{}_{:d}'.format(name, i), Pipe())
+                         for i, Pipe in enumerate(Models)]
+                model = Pipeline(pipes).fit(X[train_ix], y[train_ix])
                 y_pred = model.predict(X[test_ix])
                 y_true = y[test_ix]
                 res = TASKMETRICS[TASKTYPE[task]](y_true, y_pred)
