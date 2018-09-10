@@ -1,0 +1,3 @@
+[submodule "recsys"]
+	path = recsys
+	url = https://github.com/eldrin/mf-numba.git
