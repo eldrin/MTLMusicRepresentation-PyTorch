@@ -79,12 +79,12 @@ TASKMETRICS = {
 }
 
 RECSYS_SETUP = {
-    'n_factors':50,
+    'n_factors':20,
     'alpha':0.1,
     'reg_phi':0.1,
     'reg_wh':0.0001,
     'init':0.01,
-    'n_epochs':15,
+    'n_epochs':1,
     'verbose':0
 }
 
@@ -249,7 +249,10 @@ def run(feature_fn, task, out_root, n_cv=5):
                 eval_recsys(
                     id, triplet, R, X.T, 0.95,
                     model_setup=RECSYS_SETUP,
-                    monitors=RECSYS_MONITORS
+                    monitors=[
+                        AveragePrecision(k=120),
+                        NDCG(k=500), Recall(k=120)
+                    ]
                 )
             )
             toc = time.time()
