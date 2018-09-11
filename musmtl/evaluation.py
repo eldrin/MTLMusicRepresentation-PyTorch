@@ -79,16 +79,16 @@ TASKMETRICS = {
 }
 
 RECSYS_SETUP = {
-    'n_factors':20,
+    'n_factors':50,
     'alpha':0.1,
     'reg_phi':0.1,
     'reg_wh':0.0001,
     'init':0.01,
-    'n_epochs':1,
+    'n_epochs':15,
     'verbose':0
 }
 
-RECSYS_MONITORS = [AveragePrecision(k=20), NDCG(k=None), Recall(k=20)]
+RECSYS_MONITORS = [AveragePrecision(k=50), NDCG(k=None), Recall(k=50)]
 
 
 def load_data(fn, task):
@@ -227,8 +227,8 @@ def run(feature_fn, task, out_root, n_cv=5):
 
         # set number of thread explicitly
         # : for recsys, numba threading is more important
-        os.environ['OMP_NUM_THREADS'] = "8"
-        os.environ['NUMBA_NUM_THREADS'] = "8"
+        os.environ['OMP_NUM_THREADS'] = "4"
+        os.environ['NUMBA_NUM_THREADS'] = "4"
 
         # standardizing
         sclr = StandardScaler()
@@ -250,8 +250,8 @@ def run(feature_fn, task, out_root, n_cv=5):
                     id, triplet, R, X.T, 0.95,
                     model_setup=RECSYS_SETUP,
                     monitors=[
-                        AveragePrecision(k=20),
-                        NDCG(k=500), Recall(k=20)
+                        AveragePrecision(k=50),
+                        NDCG(k=500), Recall(k=50)
                     ]
                 )
             )
