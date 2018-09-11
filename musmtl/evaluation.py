@@ -88,7 +88,7 @@ RECSYS_SETUP = {
     'verbose':0
 }
 
-RECSYS_MONITORS = [AveragePrecision(k=120), NDCG(k=None), Recall(k=120)]
+RECSYS_MONITORS = [AveragePrecision(k=20), NDCG(k=None), Recall(k=20)]
 
 
 def load_data(fn, task):
@@ -175,8 +175,8 @@ def densify_triplet(triplet, X, user_min=20, item_min=50):
     triplet_dense.loc[:, 'item'] = triplet_dense['item'].map(ix2tracks)
 
     # get new id
-    uniq_users = {v:k for k, v in enumerate(data['user'].unique())}
-    uniq_items = {v:k for k, v in enumerate(data['item'].unique())}
+    uniq_users = {v:k for k, v in enumerate(triplet_dense['user'].unique())}
+    uniq_items = {v:k for k, v in enumerate(triplet_dense['item'].unique())}
 
     triplet_dense.loc[:, 'user'] = triplet_dense['user'].map(uniq_users)
     triplet_dense.loc[:, 'item'] = triplet_dense['item'].map(uniq_items)
@@ -250,8 +250,8 @@ def run(feature_fn, task, out_root, n_cv=5):
                     id, triplet, R, X.T, 0.95,
                     model_setup=RECSYS_SETUP,
                     monitors=[
-                        AveragePrecision(k=120),
-                        NDCG(k=500), Recall(k=120)
+                        AveragePrecision(k=20),
+                        NDCG(k=500), Recall(k=20)
                     ]
                 )
             )
