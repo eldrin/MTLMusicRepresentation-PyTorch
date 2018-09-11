@@ -3,6 +3,7 @@ from os.path import join, dirname, basename
 import sys
 import glob
 from functools import partial
+import time
 
 import numpy as np
 import pandas as pd
@@ -19,7 +20,7 @@ from tqdm import tqdm
 # adding RecSys submodule to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../recsys/'))
 
-from cfmodels.utils import read_data, densify
+from cfmodels.utils import read_data, densify, df2csr
 from cfmodels.validation import split_outer
 from cfmodels.factorization import WMFA
 from cfmodels.factorization.wmf.wmf import linear_transform
@@ -78,13 +79,13 @@ TASKMETRICS = {
 }
 
 RECSYS_SETUP = {
-    n_factors:50,
-    alpha:0.1,
-    reg_phi:0.1,
-    reg_wh:0.0001,
-    init:0.01,
-    n_epochs:15,
-    verbose:0
+    'n_factors':50,
+    'alpha':0.1,
+    'reg_phi':0.1,
+    'reg_wh':0.0001,
+    'init':0.01,
+    'n_epochs':15,
+    'verbose':0
 }
 
 RECSYS_MONITORS = [AveragePrecision(k=120), NDCG(k=None), Recall(k=120)]
@@ -130,19 +131,18 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
 
     for train_ix, test_ix in split_gen:
         yield train_ix, test_ix
-        
-        
+
+
 def eval_recsys(id, triplet, R, X, train_ratio, model_setup,
                 monitors=[AveragePrecision(k=120),
                           NDCG(k=None), Recall(k=120)]):
     """"""
     task = 'recommendation'
     result = []
-    
+
     # split (for out-of-matrix (Hao Wang 2016.) evaluation)
     train, test = split_outer(triplet, ratio=train_ratio)
 
-    
     Rtr = df2csr(train, R.shape)
     Rts = df2csr(test, R.shape)
 
@@ -151,7 +151,7 @@ def eval_recsys(id, triplet, R, X, train_ratio, model_setup,
                  **model_setup)
 
     # fit & score
-    model.fit(Rtr, Rts, X)
+    model.fit((Rtr, X), (Rts, X))
     res = model.score(Rtr, Rts, X)
 
     # record
@@ -186,7 +186,7 @@ def densify_triplet(triplet, X, user_min=20, item_min=50):
         (triplet_dense['value'], (triplet_dense['user'], triplet_dense['item']))
     ).tocsr()
     X_ = X[list(uniq_items.keys())]
-    
+
     return triplet_dense, R_, X_
 
 
@@ -199,12 +199,13 @@ def run(feature_fn, task, out_root, n_cv=5):
     out_fn = join(out_root, '{}_{}.csv'.format(id, task))
     X, Y = load_data(feature_fn, task)
 
-    for name, Models in TASKMODELS[TASKTYPE[task]].items():
-        if task != 'recommendation':
+    if TASKTYPE[task] != 'recommendation':  # CLASSIFICATION / REGRESSION
+
+        for name, Models in TASKMODELS[TASKTYPE[task]].items():
             # set number of thread explicitly
             # : for clf / reg, numpy (openmp) threading is more important
             os.environ['OMP_NUM_THREADS'] = "2"
-            os.environ['NUMBA_NUM_THREADS'] = "1"
+            os.environ['NUMBA_NUM_THREADS'] = "2"
 
             y = Y[3].values
             if task == 'regression':
@@ -221,49 +222,58 @@ def run(feature_fn, task, out_root, n_cv=5):
 
                 # store
                 result.append({'id': id, 'task': task, 'model': name, 'value': res,})
-                
-        else:
-            # set number of thread explicitly
-            # : for recsys, numba threading is more important
-            os.environ['OMP_NUM_THREADS'] = "1"
-            os.environ['NUMBA_NUM_THREADS'] = "2"
-            
-            # standardizing
-            sclr = StandardScaler()
-            X = sclr.fit_transform(X)
 
-            # item_hash = pd.read_csv(TASK2LABEL_FN[task]['items'V],
-            #                         header=None, index_col=None)
-            R, triplet = Y  # parse the data
+    else:  # RECOMMENDATION
 
-            # 1. Our setup
-            # min_items_per_user = 5
-            # min_users_per_item = 5
-            # held-out tracks : 5%
-            # metrics : R@40 / AP@40 / NDCG
-            for _ in range(n_cv):
-                result.extend(
-                    eval_recsys(
-                        id, triplet, R, X.T, 0.95,
-                        model_setup=RECSYS_SETUP,
-                        monitors=RECSYS_MONITORS
-                    )
+        # set number of thread explicitly
+        # : for recsys, numba threading is more important
+        os.environ['OMP_NUM_THREADS'] = "8"
+        os.environ['NUMBA_NUM_THREADS'] = "8"
+
+        # standardizing
+        sclr = StandardScaler()
+        X = sclr.fit_transform(X)
+
+        # item_hash = pd.read_csv(TASK2LABEL_FN[task]['items'V],
+        #                         header=None, index_col=None)
+        R, triplet = Y  # parse the data
+
+        # 1. Our setup
+        # min_items_per_user = 5
+        # min_users_per_item = 5
+        # held-out tracks : 5%
+        # metrics : R@40 / AP@40 / NDCG
+        for i in range(n_cv):
+            tic = time.time()
+            result.extend(
+                eval_recsys(
+                    id, triplet, R, X.T, 0.95,
+                    model_setup=RECSYS_SETUP,
+                    monitors=RECSYS_MONITORS
                 )
-            
-            # 2. H. Wang's setup (DENse filtering for the data)
-            # min_items_per_user = 20
-            # min_users_per_item = 50
-            # held-out tracks : 5%
-            # metrics : R@40 / AP@40 / NDCG
-            triplet_dense, R_, X_ = densify_triplet(triplet, X)
-            for _ in range(n_cv):
-                result.extend(
-                    eval_recsys(
-                        id, triplet_dense, R_, X_.T, 0.95,
-                        model_setup=RECSYS_SETUP,
-                        monitors=RECSYS_MONITORS
-                    )
+            )
+            toc = time.time()
+            print('[Our setup] Processed {:d}th fold. ({:.2f}s taken)'
+                  .format(i, toc - tic))
+
+        # 2. H. Wang's setup (DENse filtering for the data)
+        # min_items_per_user = 20
+        # min_users_per_item = 50
+        # held-out tracks : 5%
+        # metrics : R@40 / AP@40 / NDCG
+        triplet_dense, R_, X_ = densify_triplet(triplet, X)
+        for i in range(n_cv):
+            tic = time.time()
+            result.extend(
+                eval_recsys(
+                    id, triplet_dense, R_, X_.T, 0.95,
+                    model_setup=RECSYS_SETUP,
+                    monitors=RECSYS_MONITORS
                 )
+            )
+            toc = time.time()
+            print('[Wang\'s setup] Processed {:d}th fold. ({:.2f}s taken)'
+                  .format(i, toc - tic))
 
     # save
     pd.DataFrame(result).to_csv(out_fn, index=None)
