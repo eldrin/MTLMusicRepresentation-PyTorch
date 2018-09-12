@@ -82,13 +82,13 @@ RECSYS_SETUP = {
     'n_factors':50,
     'alpha':0.1,
     'reg_phi':0.1,
-    'reg_wh':0.0001,
+    'reg_wh':0.00001,
     'init':0.01,
     'n_epochs':15,
     'verbose':0
 }
 
-RECSYS_MONITORS = [AveragePrecision(k=50), NDCG(k=None), Recall(k=50)]
+RECSYS_MONITORS = [AveragePrecision(k=100), NDCG(k=None), Recall(k=100)]
 
 
 def load_data(fn, task):
