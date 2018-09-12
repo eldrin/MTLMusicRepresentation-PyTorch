@@ -1,4 +1,8 @@
 import os
+os.environ['OMP_NUM_THREADS'] = "1"
+os.environ['MKL_NUM_THREADS'] = "1"
+os.environ['NUMBA_NUM_THREADS'] = "2"
+
 from os.path import join, dirname, basename
 import sys
 import glob
@@ -85,10 +89,10 @@ RECSYS_SETUP = {
     'reg_wh':0.00001,
     'init':0.01,
     'n_epochs':15,
-    'verbose':0
+    'verbose':1
 }
 
-RECSYS_MONITORS = [AveragePrecision(k=100), NDCG(k=None), Recall(k=100)]
+RECSYS_MONITORS = [AveragePrecision(k=80), NDCG(k=None), Recall(k=80)]
 
 
 def load_data(fn, task):
@@ -151,6 +155,8 @@ def eval_recsys(id, triplet, R, X, train_ratio, model_setup,
                  **model_setup)
 
     # fit & score
+    # # set number of thread explicitly
+    # # : for recsys, numba threading is more important
     model.fit((Rtr, X), (Rts, X))
     res = model.score(Rtr, Rts, X)
 
@@ -225,11 +231,6 @@ def run(feature_fn, task, out_root, n_cv=5):
 
     else:  # RECOMMENDATION
 
-        # set number of thread explicitly
-        # : for recsys, numba threading is more important
-        os.environ['OMP_NUM_THREADS'] = "4"
-        os.environ['NUMBA_NUM_THREADS'] = "4"
-
         # standardizing
         sclr = StandardScaler()
         X = sclr.fit_transform(X)
@@ -250,8 +251,8 @@ def run(feature_fn, task, out_root, n_cv=5):
                     id, triplet, R, X.T, 0.95,
                     model_setup=RECSYS_SETUP,
                     monitors=[
-                        AveragePrecision(k=50),
-                        NDCG(k=500), Recall(k=50)
+                        AveragePrecision(k=80),
+                        NDCG(k=500), Recall(k=80)
                     ]
                 )
             )
