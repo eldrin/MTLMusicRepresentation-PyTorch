@@ -34,6 +34,20 @@ def _generate_mels(fns):
             print(e)
         else:
             yield fn, y
+            
+            
+def mfcc_baseline(X):
+    """"""
+    # X => (1, 2, n_steps, n_bins)
+    x = X[0].mean(0)  # => (n_steps, n_bins)
+    m = librosa.feature.mfcc(S=x.T).T
+    dm = m[1:] - m[:-1]
+    ddm = dm[1:] - dm[:-1]
+    return np.r_[
+        m.mean(0), m.std(0),
+        dm.mean(0),dm.std(0),
+        ddm.mean(0), ddm.std(0)
+    ]
 
 
 class FeatureExtractor(object):
@@ -52,12 +66,15 @@ class FeatureExtractor(object):
     @staticmethod
     def _load_model(model_fn, scaler_fn, is_gpu):
         """"""
-        # load checkpoint to the model
-        checkpoint = torch.load(
-            model_fn, map_location=lambda storage, loc: storage)
-        model = VGGlikeMTL(checkpoint['tasks'],
-                           checkpoint['branch_at'])
-        model.load_state_dict(checkpoint['state_dict'])
+        if model_fn not None:
+            # load checkpoint to the model
+            checkpoint = torch.load(
+                model_fn, map_location=lambda storage, loc: storage)
+            model = VGGlikeMTL(checkpoint['tasks'],
+                               checkpoint['branch_at'])
+            model.load_state_dict(checkpoint['state_dict'])
+        else:  # Random feature case
+            model = VGGlikeMTL(['tag'], "null")
         model.eval()
 
         # initialize scaler
@@ -121,17 +138,24 @@ class FeatureExtractor(object):
         X = list(_generate_mels(self.mel_fns))
 
         for model_fn in model_fns:
+                # initiate output containor
+                output = []
 
-            # initiate output containor
-            output = []
+                # spawn model
+                if model_fn == 'random':
+                    scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
+                else:
+                    scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
 
-            # spawn model
-            scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
+                # process
+                for fn, x in X:
+                    if model_fn == 'mfcc':
+                        # extract MFCC baseline
+                        output.append(mfcc_baseline(x))
 
-            # process
-            for fn, x in X:
-                Y = self._preprocess_mel(x, self.is_gpu)
-                z = self._extract(scaler, model, Y)
-                output.append(z)
+                    else:
+                        Y = self._preprocess_mel(x, self.is_gpu)
+                        z = self._extract(scaler, model, Y)
+                        output.append(z)
 
-            yield np.array(output)  # (n x (d x m))
+                yield np.array(output)  # (n x (d x m))
