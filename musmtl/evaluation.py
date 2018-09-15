@@ -1,7 +1,7 @@
 import os
-os.environ['OMP_NUM_THREADS'] = "1"
-os.environ['MKL_NUM_THREADS'] = "1"
-os.environ['NUMBA_NUM_THREADS'] = "2"
+# os.environ['OMP_NUM_THREADS'] = "8"
+os.environ['MKL_NUM_THREADS'] = "8"
+os.environ['NUMBA_NUM_THREADS'] = "1"
 
 from os.path import join, dirname, basename
 import sys
@@ -138,10 +138,11 @@ def split_generator(X, Y, n_cv=5, random_seed=1234):
 
 
 def eval_recsys(id, triplet, R, X, train_ratio, model_setup,
-                monitors=[AveragePrecision(k=120),
-                          NDCG(k=None), Recall(k=120)]):
+                monitors=[AveragePrecision(k=120), NDCG(k=None), Recall(k=120)],
+                is_dense=False):
     """"""
     task = 'recommendation'
+    density = 'dense' if is_dense else 'sparse'
     result = []
 
     # split (for out-of-matrix (Hao Wang 2016.) evaluation)
@@ -163,7 +164,7 @@ def eval_recsys(id, triplet, R, X, train_ratio, model_setup,
     # record
     for metric_name, metric_value in res.items():
         result.append(
-            {'id': id, 'task': task, 'model': 'WMFA', 'split': 'dense',
+            {'id': id, 'task': task, 'model': 'WMFA', 'split': density,
              'metric': metric_name, 'value': metric_value}
         )
 
@@ -196,7 +197,7 @@ def densify_triplet(triplet, X, user_min=20, item_min=50):
     return triplet_dense, R_, X_
 
 
-def run(feature_fn, task, out_root, n_cv=5):
+def run(feature_fn, task, out_root, n_cv=5, standardize=False):
     """"""
     assert task in TASKTYPE
 
@@ -208,20 +209,22 @@ def run(feature_fn, task, out_root, n_cv=5):
     if TASKTYPE[task] != 'recommendation':  # CLASSIFICATION / REGRESSION
 
         for name, Models in TASKMODELS[TASKTYPE[task]].items():
-            # set number of thread explicitly
-            # : for clf / reg, numpy (openmp) threading is more important
-            os.environ['OMP_NUM_THREADS'] = "2"
-            os.environ['NUMBA_NUM_THREADS'] = "2"
 
             y = Y[3].values
             if task == 'regression':
                 y = y.astype(float)
 
             for train_ix, test_ix in split_generator(X, Y, n_cv):
+
                 # model initialization & training
+                if standardize and Models[0] != StandardScaler:
+                    print('Adding standardizer in the pipeline...')
+                    Models = [StandardScaler] + Models
+
                 pipes = [('{}_{:d}'.format(name, i), Pipe())
                          for i, Pipe in enumerate(Models)]
                 model = Pipeline(pipes).fit(X[train_ix], y[train_ix])
+
                 y_pred = model.predict(X[test_ix])
                 y_true = y[test_ix]
                 res = TASKMETRICS[TASKTYPE[task]](y_true, y_pred)
@@ -253,7 +256,8 @@ def run(feature_fn, task, out_root, n_cv=5):
                     monitors=[
                         AveragePrecision(k=80),
                         NDCG(k=500), Recall(k=80)
-                    ]
+                    ],
+                    is_dense=False
                 )
             )
             toc = time.time()
@@ -272,7 +276,8 @@ def run(feature_fn, task, out_root, n_cv=5):
                 eval_recsys(
                     id, triplet_dense, R_, X_.T, 0.95,
                     model_setup=RECSYS_SETUP,
-                    monitors=RECSYS_MONITORS
+                    monitors=RECSYS_MONITORS,
+                    is_dense=True
                 )
             )
             toc = time.time()

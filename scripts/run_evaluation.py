@@ -22,9 +22,6 @@ args = parser.parse_args()
 
 for i, fn in enumerate(filter(lambda fn: TASKKEY[args.task] == basename(fn),
                               glob.glob(join(args.feature_dir, '*/*.npy')))):
-    if i > 0:
-        break
-
     id = basename(dirname(fn))
     if exists(join(args.out_root, '{}_{}.csv'.format(id, args.task))):
         continue

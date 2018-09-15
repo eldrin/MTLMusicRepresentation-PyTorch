@@ -16,9 +16,12 @@ parser.add_argument("model_checkpoints", help='path to file listing model checkp
 parser.add_argument("scaler_fn", help='path to scaler model (.dat.gz)')
 parser.add_argument("target_audios", help='path to file listing target audio files (.txt)')
 parser.add_argument("out_root", help='filepath for the output')
-parser.add_argument("--is-gpu", type=bool, default=False,
-                    help='flag for gpu computation on feature extraction')
+# parser.add_argument("--is-gpu", type=bool, default=False,
+#                     help='flag for gpu computation on feature extraction')
+parser.add_argument('--gpu', dest='is_gpu', action='store_true')
+parser.add_argument('--no-gpu', dest='is_gpu', action='store_false')
 args = parser.parse_args()
+print(args.is_gpu)
 
 # parse model paths
 model_fns = []
@@ -27,7 +30,7 @@ with open(args.model_checkpoints) as f:
         fn = line.replace('\n', '')
 
         # check input / output path is existing and valid
-        if not exists(fn):
+        if fn != 'mfcc' and fn != 'random' and not exists(fn):
             raise IOError('[ERROR] model checkpoint not exists!')
 
         model_fns.append(fn)

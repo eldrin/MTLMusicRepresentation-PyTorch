@@ -34,8 +34,8 @@ def _generate_mels(fns):
             print(e)
         else:
             yield fn, y
-            
-            
+
+
 def mfcc_baseline(X):
     """"""
     # X => (1, 2, n_steps, n_bins)
@@ -66,7 +66,7 @@ class FeatureExtractor(object):
     @staticmethod
     def _load_model(model_fn, scaler_fn, is_gpu):
         """"""
-        if model_fn not None:
+        if model_fn is not None:
             # load checkpoint to the model
             checkpoint = torch.load(
                 model_fn, map_location=lambda storage, loc: storage)
@@ -144,6 +144,8 @@ class FeatureExtractor(object):
                 # spawn model
                 if model_fn == 'random':
                     scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
+                elif model_fn == 'mfcc':
+                    pass
                 else:
                     scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
 
@@ -151,7 +153,7 @@ class FeatureExtractor(object):
                 for fn, x in X:
                     if model_fn == 'mfcc':
                         # extract MFCC baseline
-                        output.append(mfcc_baseline(x))
+                        output.append(mfcc_baseline(x[None]))
 
                     else:
                         Y = self._preprocess_mel(x, self.is_gpu)
