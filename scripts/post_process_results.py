@@ -1,7 +1,16 @@
-from os.path import dirname, basename
+from os.path import join, dirname, basename
 import copy
 import glob
+import argparse
 import pandas as pd
+
+# setup parser
+parser = argparse.ArgumentParser()
+parser.add_argument("result_root",
+                    help="root directory where all the result file (.csv) dumped")
+parser.add_argument("out_fn", default='result.csv',
+                    help="output result file (.csv) name")
+args = parser.parse_args()
 
 design = pd.read_csv('./eval/data/x.csv')
 design.columns = ['self', 'bpm', 'year', 'taste', 'tag', 'lyrics', 'cdr_tag', 'artist', 'arc', 'n']
@@ -31,7 +40,7 @@ r = [1, 1, 1, 1, 1, 1, 1, 1, None, 8]  # row template
 for i, case in ARC.items():
 	r_ = copy.deepcopy(r)
 	r_[-2] = case
-	
+
 	if case == 'MSSCR':  # pure-concatenation
 		row = pd.DataFrame([r_], columns=design.columns)
 		row.index = ['allsrcnull']
@@ -40,25 +49,25 @@ for i, case in ARC.items():
 		row = pd.DataFrame([r_], columns=design.columns)
 		row.index = ['allsrc2']
 
-	elif case == 'MSCR@4':  # branch at 2
+	elif case == 'MSCR@4':  # branch at 4
 		row = pd.DataFrame([r_], columns=design.columns)
 		row.index = ['allsrc4']
-	
-	elif case == 'MSCR@6':  # branch at 2
+
+	elif case == 'MSCR@6':  # branch at 6
 		row = pd.DataFrame([r_], columns=design.columns)
 		row.index = ['allsrc6']
 
-	elif case == 'MSSR@fc':  # branch at 2
+	elif case == 'MSSR@fc':  # branch at fc
 		row = pd.DataFrame([r_], columns=design.columns)
 		row.index = ['allsrcfc']
-	
+
 	design = design.append(row)
 
 design = design.reset_index()
 design.columns = ['id'] + list(design.columns[1:])
 
 # load the data
-fns = glob.glob('./results/*/*.csv')
+fns = glob.glob(join(args.result_root, '*/*.csv'))
 
 # metric map
 METRIC = {
@@ -130,7 +139,7 @@ def load_csv(fn):
 		d1['std'] = d.groupby('model').std()['value']
 
 		res = d1.reset_index()
-		
+
 		res['data'] = data
 		res['task'] = TASK[data]
 		res['metric'] = METRIC[TASK[data]]
@@ -161,10 +170,10 @@ result = D.set_index('id').join(design.set_index('id'), how='inner')
 
 # organize columns
 result = result[
-	['data', 'task', 'model', 'metric', 'mean', 'std',
-	 'self', 'bpm', 'year', 'taste', 'tag' , 'lyrics' ,'cdr_tag', 'artist',
-	 'arc', 'n']
+    ['data', 'task', 'model', 'metric', 'mean', 'std',
+     'self', 'bpm', 'year', 'taste', 'tag' , 'lyrics' ,'cdr_tag', 'artist',
+     'arc', 'n']
 ]
 
 # save
-result.to_csv('result.csv')
+result.to_csv(args.out_fn)
