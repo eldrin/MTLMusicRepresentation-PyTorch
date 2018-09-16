@@ -1,6 +1,6 @@
 import os
-# os.environ['OMP_NUM_THREADS'] = "8"
-os.environ['MKL_NUM_THREADS'] = "8"
+# os.environ['OMP_NUM_THREADS'] = "2"
+os.environ['MKL_NUM_THREADS'] = "2"
 os.environ['NUMBA_NUM_THREADS'] = "1"
 
 from os.path import join, dirname, basename
@@ -14,8 +14,8 @@ import pandas as pd
 from scipy import sparse as sp
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier, MLPRegressor
-from sklearn.svm import LinearSVC, SVR
-from sklearn.model_selection import StratifiedKFold
+from sklearn.svm import LinearSVC, SVR, SVC
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score, r2_score
 
@@ -93,6 +93,24 @@ RECSYS_SETUP = {
 }
 
 RECSYS_MONITORS = [AveragePrecision(k=80), NDCG(k=None), Recall(k=80)]
+
+
+SVM_PARAMS = [
+    {
+        'C': [0.1, 2., 8., 32.],
+        'gamma': [0.125, 0.03125, 0.0078125, 0.001953125,
+                  0.00048828125, 0.0001220703125, 0.00625,
+                  'auto'],
+        'kernel': ['rbf']
+    },
+    {
+        'C': [0.1, 2., 8., 32.],
+        'kernel': ['linear']
+    }
+]
+
+N_GRID_CV = 10
+N_GRID_JOBS = int(os.environ['MKL_NUM_THREADS'])
 
 
 def load_data(fn, task):
@@ -197,7 +215,7 @@ def densify_triplet(triplet, X, user_min=20, item_min=50):
     return triplet_dense, R_, X_
 
 
-def run(feature_fn, task, out_root, n_cv=5, standardize=False):
+def run(feature_fn, task, out_root, n_cv=5, standardize=False, grid_search=False):
     """"""
     assert task in TASKTYPE
 
@@ -221,9 +239,38 @@ def run(feature_fn, task, out_root, n_cv=5, standardize=False):
                     print('Adding standardizer in the pipeline...')
                     Models = [StandardScaler] + Models
 
-                pipes = [('{}_{:d}'.format(name, i), Pipe())
-                         for i, Pipe in enumerate(Models)]
-                model = Pipeline(pipes).fit(X[train_ix], y[train_ix])
+                if grid_search and (Models[-1] == LinearSVC or Models[-1] == SVR):
+                    if Models[-1] == LinearSVC:
+                        Models = Models[:-1] + [SVC]  # will search also kernel SVC
+
+                    pipes = [('{}_{:d}'.format(name, i), Pipe())
+                             for i, Pipe in enumerate(Models)]
+                    # build search 
+                    param_search_setup = [
+                        {
+                            '{}__{}'.format(pipes[-1][0], param_name): param_range
+                            for param_name, param_range
+                            in search_setup.items()
+                        }
+                        for search_setup
+                        in SVM_PARAMS
+                    ]
+                    print(param_search_setup)
+
+                    model_ = Pipeline(pipes)
+                    grid = GridSearchCV(
+                        model_, param_search_setup, cv=N_GRID_CV,
+                        n_jobs=N_GRID_JOBS
+                    )
+                    grid.fit(X[train_ix], y[train_ix])
+
+                    model = grid.best_estimator_
+                    model.fit(X[train_ix], y[train_ix])
+
+                else:
+                    pipes = [('{}_{:d}'.format(name, i), Pipe())
+                             for i, Pipe in enumerate(Models)]
+                    model = Pipeline(pipes).fit(X[train_ix], y[train_ix])
 
                 y_pred = model.predict(X[test_ix])
                 y_true = y[test_ix]
