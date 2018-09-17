@@ -1,6 +1,6 @@
 import os
-# os.environ['OMP_NUM_THREADS'] = "2"
-os.environ['MKL_NUM_THREADS'] = "2"
+# os.environ['OMP_NUM_THREADS'] = "1"
+os.environ['MKL_NUM_THREADS'] = "32"
 os.environ['NUMBA_NUM_THREADS'] = "1"
 
 from os.path import join, dirname, basename
@@ -97,15 +97,7 @@ RECSYS_MONITORS = [AveragePrecision(k=80), NDCG(k=None), Recall(k=80)]
 
 SVM_PARAMS = [
     {
-        'C': [0.1, 2., 8., 32.],
-        'gamma': [0.125, 0.03125, 0.0078125, 0.001953125,
-                  0.00048828125, 0.0001220703125, 0.00625,
-                  'auto'],
-        'kernel': ['rbf']
-    },
-    {
-        'C': [0.1, 2., 8., 32.],
-        'kernel': ['linear']
+        'C': [0.01, 0.1, 1., 4., 8., 32.],
     }
 ]
 
@@ -240,8 +232,8 @@ def run(feature_fn, task, out_root, n_cv=5, standardize=False, grid_search=False
                     Models = [StandardScaler] + Models
 
                 if grid_search and (Models[-1] == LinearSVC or Models[-1] == SVR):
-                    if Models[-1] == LinearSVC:
-                        Models = Models[:-1] + [SVC]  # will search also kernel SVC
+                    # if Models[-1] == LinearSVC:
+                    #     Models = Models[:-1] + [SVC]  # will search also kernel SVC
 
                     pipes = [('{}_{:d}'.format(name, i), Pipe())
                              for i, Pipe in enumerate(Models)]
@@ -255,12 +247,11 @@ def run(feature_fn, task, out_root, n_cv=5, standardize=False, grid_search=False
                         for search_setup
                         in SVM_PARAMS
                     ]
-                    print(param_search_setup)
 
                     model_ = Pipeline(pipes)
                     grid = GridSearchCV(
                         model_, param_search_setup, cv=N_GRID_CV,
-                        n_jobs=N_GRID_JOBS
+                        n_jobs=N_GRID_JOBS, verbose=1
                     )
                     grid.fit(X[train_ix], y[train_ix])
 
