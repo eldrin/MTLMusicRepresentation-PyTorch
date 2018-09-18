@@ -128,7 +128,7 @@ class Trainer(object):
                         (self.model.module.shared.parameters()
                          if self.multi_gpu
                          else self.model.shared.parameters()),
-                        lr = self.learn_rate / len(self.tasks),
+                        lr = self.learn_rate,
                         weight_decay = self.l2)
                 }
             )
