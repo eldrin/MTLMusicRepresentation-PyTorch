@@ -18,7 +18,7 @@ VALID_FUSION = {
 
 
 class VGGlikeMTL(nn.Module):
-    """ VGG-like architecture for Multi-Task Learning 
+    """ VGG-like architecture for Multi-Task Learning
     """
     def __init__(self, tasks, branch_at):
         """
@@ -30,7 +30,7 @@ class VGGlikeMTL(nn.Module):
         super(VGGlikeMTL, self).__init__()
         assert all([task.lower() in VALID_TASKS for task in tasks])
         assert branch_at in VALID_FUSION
-        
+
         # build network
         self._build_net(tasks, branch_at)
         self.tasks = tasks
@@ -40,14 +40,14 @@ class VGGlikeMTL(nn.Module):
         """"""
         # build shared layers
         self.shared = nn.Sequential(*self._build_shared(branch_at))
-        
+
         # list of layers (raw)
         self.branches_ = OrderedDict([
             (task, self._build_branch(task, branch_at))
             for task in tasks
         ])
         self._task2idx = {k:i for i, k in enumerate(self.branches_.keys())}
-        
+
         # build feature extraction endpoint
         self.branches_feature = nn.ModuleList([
             nn.Sequential(*self.branches_[task][0])
@@ -58,7 +58,7 @@ class VGGlikeMTL(nn.Module):
             nn.Sequential(*self.branches_[task][1])
             for task in tasks
         ])
-    
+
     def _build_shared(self, branch_at):
         """"""
         if branch_at != 'null':
@@ -93,7 +93,7 @@ class VGGlikeMTL(nn.Module):
                 return shared  # (batch_sz, 256)
         else:
             return []  # no-sharing
-        
+
     def _build_branch(self, task, branch_at):
         """"""
         # build feature part
@@ -146,7 +146,7 @@ class VGGlikeMTL(nn.Module):
         # (currently depends on the identity behavior of empty nn.ModuleList)
         X = self.shared(X)
         return self.branches_feature[self._task2idx[task]](X)
-    
+
     def forward(self, X, task):
         """"""
         if task == 'self_':
@@ -157,7 +157,7 @@ class VGGlikeMTL(nn.Module):
             X = self.feature(X, task)
 
         return self.branches_infer[self._task2idx[task]](X)
-        
+
 
 class ConvBlock2d(nn.Module):
     """ Convolutional Building Block
@@ -186,8 +186,8 @@ class GlobalAveragePool(nn.Module):
     """
     def forward(self, X):
         return torch.mean(X.view(X.size(0), X.size(1), -1), dim=2)
-    
-    
+
+
 class SpecStandardScaler(nn.Module):
     """ Standard Scaler for Temporal Axis on TF Representation
     """
@@ -197,12 +197,12 @@ class SpecStandardScaler(nn.Module):
             mean (np.ndarray): mean of spectrum
             std (np.ndarray): std of spectrum
         """
-        super(SpecStandardScaler, self).__init__()        
+        super(SpecStandardScaler, self).__init__()
         self.mu = nn.Parameter(
             torch.from_numpy(mean)[None, None, None, :].float(),
             requires_grad=False
         )
-        
+
         self.sigma = nn.Parameter(
             torch.max(
                 torch.from_numpy(std).float(),
@@ -210,7 +210,7 @@ class SpecStandardScaler(nn.Module):
             )[None, None, None, :],
             requires_grad=False
         )
-        
+
     def forward(self, X):
         """"""
         return (X - self.mu) / self.sigma
