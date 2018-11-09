@@ -12,7 +12,6 @@ import librosa
 
 import torch
 from torch.autograd import Variable
-from prefetch_generator import BackgroundGenerator, background
 from tqdm import tqdm
 
 from .model import VGGlikeMTL, SpecStandardScaler
@@ -20,7 +19,6 @@ from .utils import extract_mel
 from .config import Config as cfg
 
 
-# @background(max_prefetch=10)
 def _generate_mels(fns):
     for fn in tqdm(fns, ncols=80):
         try:
@@ -111,7 +109,8 @@ class FeatureExtractor(object):
 
         return Y
 
-    def _extract(self, scaler, model, Y):
+    @staticmethod
+    def _extract(scaler, model, Y, is_gpu):
         # scaling & extraction
         Y = scaler(Y)
         Y = torch.cat(
@@ -119,7 +118,7 @@ class FeatureExtractor(object):
             dim=1
         )
 
-        if self.is_gpu:
+        if is_gpu:
             Y = Y.data.cpu().numpy()
         else:
             Y = Y.data.numpy()
@@ -138,26 +137,33 @@ class FeatureExtractor(object):
         X = list(_generate_mels(self.mel_fns))
 
         for model_fn in model_fns:
-                # initiate output containor
-                output = []
+            # initiate output containor
+            output = []
 
-                # spawn model
-                if model_fn == 'random':
-                    scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
-                elif model_fn == 'mfcc':
-                    pass
+            # spawn model
+            if model_fn == 'random':
+                scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
+            elif model_fn == 'mfcc':
+                pass
+            else:
+                scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
+
+            # process
+            for fn, x in X:
+                if model_fn == 'mfcc':
+                    # extract MFCC baseline
+                    output.append(mfcc_baseline(x[None]))
+
                 else:
-                    scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
+                    Y = self._preprocess_mel(x, self.is_gpu)
+                    z = self._extract(scaler, model, Y)
+                    output.append(z)
 
-                # process
-                for fn, x in X:
-                    if model_fn == 'mfcc':
-                        # extract MFCC baseline
-                        output.append(mfcc_baseline(x[None]))
+            yield np.array(output)  # (n x (d x m))
 
-                    else:
-                        Y = self._preprocess_mel(x, self.is_gpu)
-                        z = self._extract(scaler, model, Y)
-                        output.append(z)
 
-                yield np.array(output)  # (n x (d x m))
+def load_model(model_fn, is_gpu=False):
+    """"""
+    # load the checkpoint
+    # load the state_dict to the model
+    # output loaded model
