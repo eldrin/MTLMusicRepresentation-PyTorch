@@ -26,7 +26,7 @@ at the root of this git repository. Once the virtual environment is installed, y
 $pipenv shell
 ```
 
-Inside the virtual environment, you can proceed further actions. Alternatively, you can also build your own virtual environment or just using your python environment once the minimal requirements are met. (i.e. Python3, [`PyTorch`](https://pytorch.org/) (<0.4.0), Numpy, etc.)
+Inside the virtual environment, you can proceed further actions. Alternatively, you can also build your own virtual environment or just using your python environment once the minimal requirements are met. (i.e. Python3, [`PyTorch`](https://pytorch.org/) (>=0.4.0), Numpy, etc.)
 
 
 ## Feature Extraction
