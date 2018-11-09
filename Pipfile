@@ -17,6 +17,9 @@ tensorflow = "*"
 librosa = "*"
 prefetch-generator = "*"
 matplotlib = "*"
+pandas = "*"
+seaborn = "*"
+implicit = "*"
 
 [requires]
 python_version = "3.6"
