@@ -197,7 +197,7 @@ class EasyFeatureExtractor:
         mel_ = []
         for channel in audio[:2]:
             mel_.append(self.melspec(channel))
-        mel = np.array(mel_)
+        mel = np.array(mel_).transpose(0, 2, 1)
 
         # preprocess
         X = FeatureExtractor._preprocess_mel(mel, self.is_gpu)
