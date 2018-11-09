@@ -1,7 +1,7 @@
 # One Deep Music Representation to Rule Them All?
 ## :A comparative analysis of different representation learning strategies
 
-![alt text](data/framework.pdf)
+![alt text](data/framework.png)
 
 This repository provides the codebase used in the [work](https://arxiv.org/abs/1802.04051). This codebase includes all the relavant codes that are used for the experiments: 1) data preprocessing, 2) training, 3) feature extraction, 4) evaluation. The core functionalities are implemented and located under main source directory `musmtl` and scripts for each step of the experimental pipeline is located in `scripts` directory. The evaluation setups (the tracks and splits that are used in the evaluation setup) are stored in `eval/data/` directory. The recommender system models used in the experiments are implemented in [separated repository](https://github.com/eldrin/mf-numba/tree/7f2e5eef3e1a401117c70674cec066b37af8be59), for further maintenance and development. (we're planning keep developing this!)
 
