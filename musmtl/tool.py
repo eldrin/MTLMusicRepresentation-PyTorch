@@ -1,6 +1,8 @@
 import os
 import json
 
+from functools import partial
+
 # TEMPORARY SOLUTION
 import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
@@ -160,6 +162,69 @@ class FeatureExtractor(object):
                     output.append(z)
 
             yield np.array(output)  # (n x (d x m))
+
+
+class EasyFeatureExtractor(nn.Module):
+    """ High-Level wrapper class for easier feature extraction """
+    def __init__(self, model_fn, scaler_fn='./data/sclr_dbmel.dat.gz',
+                 is_gpu=False):
+        """
+        Args:
+            model_fn (str): path to the target VGGlikeMTL model parameter (.pth)
+            scaler_fn (str): path to the mel-spectrum scaler (.dat.gz)
+            is_gpu (bool): flag for the gpu computation
+        """
+        super().__init__()
+        self.is_gpu = is_gpu
+        self.scaler, self.model = FeatureExtractor._load_model(
+            model_fn, scaler_fn, self.is_gpu)
+        self.melspec = partial(librosa.feature.melspectrogram,
+                               n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN)
+
+    def forward(self, audio):
+        """
+        Args:
+            audio (numpy.ndarray):
+                audio tensor. only supports up to 2 channel (n_ch, sig_len)
+
+        Outputs:
+            output (numpy.ndarray):
+                feature tensor. (512 * model.n_tasks)
+        """
+        # check audio validity
+        audio = self._check_n_fix_audio(audio)
+
+        # get melspec
+        mel_ = []
+        for channel in audio[:2]:
+            mel_.append(self.melspec(channel))
+        mel = np.array(mel_)
+
+        # preprocess
+        X = FeatureExtractor._preprocess_mel(mel, self.is_gpu)
+
+        # extract
+        z = FeatureExtractor._extract(self.scaler, self.model, X, self.is_gpu)
+
+        # output
+        return z 
+
+    def _check_n_fix_audio(self, audio):
+        """
+        Args:
+            audio (numpy.ndarray):
+                audio tensor. only supports up to 2 channel (n_ch, sig_len)
+        """
+        if audio.ndim == 1:  # vector
+            return auduio[None]
+        elif audio.ndim == 2:  # multi-channel audio
+            if audio.shape[0] == 1:
+                return np.r_[audio, audio]  # stack to psuedo multi channel
+            else:
+                return audio
+        else:
+            raise ValueError('[ERROR] audio input must have either (sig_len,) \
+                             or (n_ch, sig_len)!')
 
 
 def load_model(model_fn, is_gpu=False):
