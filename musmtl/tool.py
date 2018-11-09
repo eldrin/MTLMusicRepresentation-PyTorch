@@ -215,7 +215,7 @@ class EasyFeatureExtractor:
                 audio tensor. only supports up to 2 channel (n_ch, sig_len)
         """
         if audio.ndim == 1:  # vector
-            return auduio[None]
+            return audio[None]
         elif audio.ndim == 2:  # multi-channel audio
             if audio.shape[0] == 1:
                 return np.r_[audio, audio]  # stack to psuedo multi channel
