@@ -13,7 +13,6 @@ from sklearn.externals import joblib
 import librosa
 
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
 from tqdm import tqdm
 
@@ -165,7 +164,7 @@ class FeatureExtractor(object):
             yield np.array(output)  # (n x (d x m))
 
 
-class EasyFeatureExtractor(nn.Module):
+class EasyFeatureExtractor:
     """ High-Level wrapper class for easier feature extraction """
     def __init__(self, model_fn, scaler_fn='./data/sclr_dbmel.dat.gz',
                  is_gpu=False):
@@ -175,7 +174,6 @@ class EasyFeatureExtractor(nn.Module):
             scaler_fn (str): path to the mel-spectrum scaler (.dat.gz)
             is_gpu (bool): flag for the gpu computation
         """
-        super().__init__()
         self.is_gpu = is_gpu
         self.scaler, self.model = FeatureExtractor._load_model(
             model_fn, scaler_fn, self.is_gpu)
