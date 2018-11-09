@@ -1,6 +1,6 @@
 import os
 # os.environ['OMP_NUM_THREADS'] = "1"
-os.environ['MKL_NUM_THREADS'] = "32"
+os.environ['MKL_NUM_THREADS'] = "2"
 os.environ['NUMBA_NUM_THREADS'] = "1"
 
 from os.path import join, dirname, basename

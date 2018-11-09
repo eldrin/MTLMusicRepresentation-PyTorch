@@ -1,6 +1,8 @@
 import os
 import json
 
+from functools import partial
+
 # TEMPORARY SOLUTION
 import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
@@ -12,7 +14,6 @@ import librosa
 
 import torch
 from torch.autograd import Variable
-from prefetch_generator import BackgroundGenerator, background
 from tqdm import tqdm
 
 from .model import VGGlikeMTL, SpecStandardScaler
@@ -20,7 +21,6 @@ from .utils import extract_mel
 from .config import Config as cfg
 
 
-# @background(max_prefetch=10)
 def _generate_mels(fns):
     for fn in tqdm(fns, ncols=80):
         try:
@@ -111,7 +111,8 @@ class FeatureExtractor(object):
 
         return Y
 
-    def _extract(self, scaler, model, Y):
+    @staticmethod
+    def _extract(scaler, model, Y, is_gpu):
         # scaling & extraction
         Y = scaler(Y)
         Y = torch.cat(
@@ -119,7 +120,7 @@ class FeatureExtractor(object):
             dim=1
         )
 
-        if self.is_gpu:
+        if is_gpu:
             Y = Y.data.cpu().numpy()
         else:
             Y = Y.data.numpy()
@@ -138,26 +139,95 @@ class FeatureExtractor(object):
         X = list(_generate_mels(self.mel_fns))
 
         for model_fn in model_fns:
-                # initiate output containor
-                output = []
+            # initiate output containor
+            output = []
 
-                # spawn model
-                if model_fn == 'random':
-                    scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
-                elif model_fn == 'mfcc':
-                    pass
+            # spawn model
+            if model_fn == 'random':
+                scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
+            elif model_fn == 'mfcc':
+                pass
+            else:
+                scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
+
+            # process
+            for fn, x in X:
+                if model_fn == 'mfcc':
+                    # extract MFCC baseline
+                    output.append(mfcc_baseline(x[None]))
+
                 else:
-                    scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
+                    Y = self._preprocess_mel(x, self.is_gpu)
+                    z = self._extract(scaler, model, Y)
+                    output.append(z)
 
-                # process
-                for fn, x in X:
-                    if model_fn == 'mfcc':
-                        # extract MFCC baseline
-                        output.append(mfcc_baseline(x[None]))
+            yield np.array(output)  # (n x (d x m))
 
-                    else:
-                        Y = self._preprocess_mel(x, self.is_gpu)
-                        z = self._extract(scaler, model, Y)
-                        output.append(z)
 
-                yield np.array(output)  # (n x (d x m))
+class EasyFeatureExtractor:
+    """ High-Level wrapper class for easier feature extraction """
+    def __init__(self, model_fn, scaler_fn='./data/sclr_dbmel.dat.gz',
+                 is_gpu=False):
+        """
+        Args:
+            model_fn (str): path to the target VGGlikeMTL model parameter (.pth)
+            scaler_fn (str): path to the mel-spectrum scaler (.dat.gz)
+            is_gpu (bool): flag for the gpu computation
+        """
+        self.is_gpu = is_gpu
+        self.scaler, self.model = FeatureExtractor._load_model(
+            model_fn, scaler_fn, self.is_gpu)
+        self.melspec = partial(librosa.feature.melspectrogram,
+                               n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN)
+
+    def forward(self, audio):
+        """
+        Args:
+            audio (numpy.ndarray):
+                audio tensor. only supports up to 2 channel (n_ch, sig_len)
+
+        Outputs:
+            output (numpy.ndarray):
+                feature tensor. (512 * model.n_tasks)
+        """
+        # check audio validity
+        audio = self._check_n_fix_audio(audio)
+
+        # get melspec
+        mel_ = []
+        for channel in audio[:2]:
+            mel_.append(self.melspec(channel))
+        mel = np.array(mel_).transpose(0, 2, 1)
+
+        # preprocess
+        X = FeatureExtractor._preprocess_mel(mel, self.is_gpu)
+
+        # extract
+        z = FeatureExtractor._extract(self.scaler, self.model, X, self.is_gpu)
+
+        # output
+        return z 
+
+    def _check_n_fix_audio(self, audio):
+        """
+        Args:
+            audio (numpy.ndarray):
+                audio tensor. only supports up to 2 channel (n_ch, sig_len)
+        """
+        if audio.ndim == 1:  # vector
+            return np.r_[audio[None], audio[None]]
+        elif audio.ndim == 2:  # multi-channel audio
+            if audio.shape[0] == 1:
+                return np.r_[audio, audio]  # stack to psuedo multi channel
+            else:
+                return audio
+        else:
+            raise ValueError('[ERROR] audio input must have either (sig_len,) \
+                             or (n_ch, sig_len)!')
+
+
+def load_model(model_fn, is_gpu=False):
+    """"""
+    # load the checkpoint
+    # load the state_dict to the model
+    # output loaded model

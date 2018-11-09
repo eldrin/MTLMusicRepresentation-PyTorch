@@ -10,18 +10,17 @@ import numpy as np
 from musmtl.tool import FeatureExtractor
 from musmtl.utils import extract_mel, parmap
 
+SCALER_FN = os.path.join(os.path.dirname(__file__), '..', 'models/sclr_dbmel.dat.gz')
+
+
 # setup arg parser
 parser = argparse.ArgumentParser()
 parser.add_argument("model_checkpoints", help='path to file listing model checkpoint files (.txt)')
-parser.add_argument("scaler_fn", help='path to scaler model (.dat.gz)')
 parser.add_argument("target_audios", help='path to file listing target audio files (.txt)')
 parser.add_argument("out_root", help='filepath for the output')
-# parser.add_argument("--is-gpu", type=bool, default=False,
-#                     help='flag for gpu computation on feature extraction')
 parser.add_argument('--gpu', dest='is_gpu', action='store_true')
 parser.add_argument('--no-gpu', dest='is_gpu', action='store_false')
 args = parser.parse_args()
-print(args.is_gpu)
 
 # parse model paths
 model_fns = []
@@ -40,7 +39,7 @@ print('Initiating worker...')
 ext = FeatureExtractor(args.target_audios, args.is_gpu)
 
 print('Processing...')
-for feature, fn in zip(ext.run(model_fns, args.scaler_fn), model_fns):
+for feature, fn in zip(ext.run(model_fns, SCALER_FN), model_fns):
 
     # get exp id
     ix = basename(fn).split('_')[0].split('.')[-1]
