@@ -6,6 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import argparse
 
 import numpy as np
+import cuda
 
 from musmtl.tool import FeatureExtractor
 from musmtl.utils import extract_mel, parmap
@@ -21,6 +22,10 @@ parser.add_argument("out_root", help='filepath for the output')
 parser.add_argument('--gpu', dest='is_gpu', action='store_true')
 parser.add_argument('--no-gpu', dest='is_gpu', action='store_false')
 args = parser.parse_args()
+
+# gpu sanity check
+if args.is_gpu and (torch.cuda.device_count() == 0):
+    print('[Warning] No GPU found! the process will be done on CPU...')
 
 # parse model paths
 model_fns = []
