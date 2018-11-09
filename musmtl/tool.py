@@ -12,7 +12,6 @@ import librosa
 
 import torch
 from torch.autograd import Variable
-from prefetch_generator import BackgroundGenerator, background
 from tqdm import tqdm
 
 from .model import VGGlikeMTL, SpecStandardScaler
@@ -20,7 +19,6 @@ from .utils import extract_mel
 from .config import Config as cfg
 
 
-# @background(max_prefetch=10)
 def _generate_mels(fns):
     for fn in tqdm(fns, ncols=80):
         try:
