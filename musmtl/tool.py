@@ -13,6 +13,7 @@ from sklearn.externals import joblib
 import librosa
 
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
 from tqdm import tqdm
 
