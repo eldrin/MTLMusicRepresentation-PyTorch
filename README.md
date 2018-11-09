@@ -8,7 +8,25 @@ This repository provides the codebase used in the [work](https://arxiv.org/abs/1
 
 ## Dependencies
 
-`TBD`
+The dependencies of this repository can be found in `Pipfile`, where all the relavant information is described. The most recommended way to setup the environment is to use [`pipenv`](https://github.com/pypa/pipenv). Assuming `pip` is already installed on the environment, (if it's not, please install the [`pip`](https://pip.pypa.io/en/stable/installing/) first)
+
+```
+$pip install pipenv
+```
+
+Afterwards, one can easily build a python virtual environment by calling
+
+```
+$pipenv install
+```
+
+at the root of this git repository. Once the virtual environment is installed, you can activate it by:
+
+```
+$pipenv shell
+```
+
+Inside the virtual environment, you can proceed further actions. Alternatively, you can also build your own virtual environment or just using your python environment once the minimal requirements are met. (i.e. Python3, [`PyTorch`](https://pytorch.org/) (<0.4.0), Numpy, etc.)
 
 
 ## Feature Extraction
