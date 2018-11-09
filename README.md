@@ -1,5 +1,5 @@
 # One Deep Music Representation to Rule Them All?
-## :A comparative analysis of different representation learning strategies
+## A Comparative Analysis of Different Representation Learning Strategies
 
 ![alt text](data/framework.png)
 
