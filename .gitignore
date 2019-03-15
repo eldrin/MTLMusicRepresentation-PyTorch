@@ -2,6 +2,7 @@
 *.pyc
 *.lock
 *.swp
+.DS_Store
 
 # directories
 runs/
