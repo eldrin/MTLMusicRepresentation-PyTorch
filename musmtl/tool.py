@@ -136,7 +136,8 @@ class FeatureExtractor(object):
         """
         # load all melspecs
         # TODO: this approach is memory heavy, but fast. better way?
-        X = list(_generate_mels(self.mel_fns))
+        # X = list(_generate_mels(self.mel_fns))
+        X = _generate_mels(self.mel_fns)
 
         for model_fn in model_fns:
             # initiate output containor
@@ -158,7 +159,7 @@ class FeatureExtractor(object):
 
                 else:
                     Y = self._preprocess_mel(x, self.is_gpu)
-                    z = self._extract(scaler, model, Y)
+                    z = self._extract(scaler, model, Y, self.is_gpu)
                     output.append(z)
 
             yield np.array(output)  # (n x (d x m))

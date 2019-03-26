@@ -6,7 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import argparse
 
 import numpy as np
-import cuda
+import torch
 
 from musmtl.tool import FeatureExtractor
 from musmtl.utils import extract_mel, parmap
