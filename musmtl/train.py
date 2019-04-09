@@ -300,6 +300,7 @@ class Trainer(object):
                 save_checkpoint(
                     {'iters': self.iters,
                      'tasks': self.tasks,
+                     'n_outs': self.n_outs,
                      'branch_at': self.branch_at,
                      'scaler_fn': self.scaler_fn,
                      'state_dict': model_state,
@@ -313,6 +314,7 @@ class Trainer(object):
                     save_checkpoint(
                         {'iters': self.iters,
                          'tasks': self.tasks,
+                         'n_outs': self.n_outs,
                          'branch_at': self.branch_at,
                          'scaler_fn': self.scaler_fn,
                          'state_dict': model_state,
