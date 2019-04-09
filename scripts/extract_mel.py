@@ -49,9 +49,12 @@ def _ext_mel(tid, overwrite=True):
     if os.path.exists(out_fn) and not overwrite:
         return
 
-    Y = extract_mel(in_fn)  # (n_ch, steps, bins)
-    Y = Y[None]  # (1, n_ch, steps, bins)
-    np.save(out_fn, Y)
+    try:
+        Y = extract_mel(in_fn)  # (n_ch, steps, bins)
+        Y = Y[None]  # (1, n_ch, steps, bins)
+        np.save(out_fn, Y)
+    except Exception as e:
+        print(tid, e)
 
 # process
 print('3. Process & saving...')

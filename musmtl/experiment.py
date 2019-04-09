@@ -48,6 +48,7 @@ class Experiment:
         bsz = config['batch_sz'] if 'batch_sz' in config else cfg.BATCH_SZ
         l2 = config['l2'] if 'l2' in config else cfg.L2
         save_loc = config['save_location'] if 'save_location' in config else cfg.SAVE_LOC
+        n_outs = config['n_outs'] if 'n_outs' in config else cfg.N_OUTS
 
         # setup custom trainer class with global setup
         self.Trainer = partial(
@@ -57,6 +58,7 @@ class Experiment:
             learn_rate = lr, n_epoches = nepo,
             batch_sz = bsz, l2 = l2,
             save_location = save_loc,
+            n_outs = n_outs,
             save_every = config['save_every'],
             scaler_fn = config['scaler_fn'],
             out_root = config['out_root'],

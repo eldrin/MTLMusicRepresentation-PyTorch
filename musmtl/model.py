@@ -20,7 +20,7 @@ VALID_FUSION = {
 class VGGlikeMTL(nn.Module):
     """ VGG-like architecture for Multi-Task Learning
     """
-    def __init__(self, tasks, branch_at):
+    def __init__(self, tasks, branch_at, n_outs=50):
         """
         Args:
             tasks (list of str): involved tasks
@@ -32,6 +32,7 @@ class VGGlikeMTL(nn.Module):
         assert branch_at in VALID_FUSION
 
         # build network
+        self.n_outs = n_outs
         self._build_net(tasks, branch_at)
         self.tasks = tasks
         self.branch_at = branch_at
@@ -135,7 +136,7 @@ class VGGlikeMTL(nn.Module):
             branch_infer.append(nn.Dropout())
             branch_infer.append(nn.Linear(128, 2))
         else:
-            branch_infer.append(nn.Linear(256, 50))
+            branch_infer.append(nn.Linear(256, self.n_outs))
 
         return branch, branch_infer
 

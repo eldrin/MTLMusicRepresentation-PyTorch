@@ -32,7 +32,7 @@ import fire
 class Trainer(object):
     """ Model trainer """
     def __init__(self, train_dataset, tasks, branch_at, scaler_fn,
-                 out_root, in_fn=None, learn_rate=0.0001, n_epoches=100,
+                 out_root, n_outs=50, in_fn=None, learn_rate=0.0001, n_epoches=100,
                  batch_sz=48, l2=1e-6, valid_dataset=None,
                  save_every=None, save_location='localhost',
                  report_every=100, is_gpu=True, name=None, **kwargs):
@@ -46,6 +46,7 @@ class Trainer(object):
             scaler_fn (str): path to saved sklearn.preprocessing.StandardScaler
                             containing mean / scale of mel spectrums
             out_root (str): output path for checkpoints
+            n_outs (int): number of output dimension at terminal layer
             in_fn (str, optional): checkpoint fn (not implemented yet)
             learn_rate (float): learning rate for Adam optimizer
             n_epochs (int): number of epoches for training
@@ -63,6 +64,7 @@ class Trainer(object):
         """
         self.tasks = tasks
         self.branch_at = branch_at
+        self.n_outs = n_outs
 
         self.learn_rate = learn_rate
         self.batch_sz = batch_sz
@@ -108,7 +110,7 @@ class Trainer(object):
         # initialize the models
         sclr = joblib.load(scaler_fn)
         self.scaler = SpecStandardScaler(sclr.mean_, sclr.scale_)
-        self.model = VGGlikeMTL(tasks, branch_at)
+        self.model = VGGlikeMTL(tasks, branch_at, n_outs=n_outs)
 
         # multi-gpu
         if torch.cuda.device_count() > 1:
@@ -194,7 +196,7 @@ class Trainer(object):
 
                         # training log
                         self.logger.add_scalar(
-                            'tloss/{}'.format(task), l[0], self.iters)
+                            'tloss/{}'.format(task), l.item(), self.iters)
 
                         # validation
                         if self.save_every is not None:
@@ -280,7 +282,7 @@ class Trainer(object):
 
             # logging
             self.logger.add_scalar('vloss/{}'.format(task),
-                                   l[0], self.iters)
+                                   l.item(), self.iters)
         if save:
             if self.save_every is not None:
                 out_fn = ('{}_checkpoint_it{:d}.pth.tar'
