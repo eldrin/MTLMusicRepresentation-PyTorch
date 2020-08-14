@@ -31,7 +31,7 @@ Inside the virtual environment, you can proceed further actions. Alternatively, 
 
 ## Feature Extraction
 
-To extract CNN features from provided model, one should first download the model files from the [dataset page](https://data.4tu.nl/repository/uuid:3c7d3086-bfec-407d-a33c-0a7a9c8d7ec0). Once the model is stored locally, one then can extract features by calling following command.
+To extract CNN features from provided model, one should first download the model files from the [dataset page](https://data.4tu.nl/articles/dataset/MTL_Music_Representation_data_underlying_the_publication_One_deep_music_representation_to_rule_them_all_A_comparative_analysis_of_different_representation_learning_strategies/12692300/1). Once the model is stored locally, one then can extract features by calling following command.
 
 ```
 $python scripts/ext_feat.py model_checkpoints.txt target_audios.txt /path/to/save/outputs/ --no-gpu
