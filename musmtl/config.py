@@ -13,3 +13,4 @@ class Config:
     BATCH_SZ = 128  # batch size
     N_OUTS = 50  # number of output dim
     SAVE_LOC = 'localhost'  # location for saving checkpoints
+    N_WORKERS = 1  # the number of workers for parallel data fetcher

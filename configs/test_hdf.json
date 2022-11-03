@@ -1,0 +1,31 @@
+{
+    "name":"test_hdf_self",
+    "dataset": {
+        "type":"hdf",
+        "train_tids_fn":"/data/splits/train.txt",
+        "valid_tids_fn":"/data/splits/valid.txt",
+        "hdf_fn":"/data/data_mel.h5",
+        "label_fn":"/data/ALL.pkl",
+        "ignore_label_intersection":true,
+        "on_mem":false
+    },
+    "scaler_fn":"./data/sclr_dbmel3.dat.gz",
+    "save_location":"localhost",
+    "is_gpu":true,
+    "save_every":50,
+    "out_root":"./data/hdf_self/",
+    "l2":1e-6,
+    "learn_rate":0.001,
+    "n_epoches":1000,
+    "batch_sz":48,
+    "n_ch":2,
+    "n_bins":128,
+    "num_workers":4,
+    "experiments":[
+        {
+            "name":"self_ss",
+            "tasks":["self_"],
+            "branch_at":"fc"
+        }
+    ]
+}

@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 import numpy as np
-from sklearn.externals import joblib
+import joblib
 import librosa
 
 import torch
@@ -70,8 +70,10 @@ class FeatureExtractor(object):
             # load checkpoint to the model
             checkpoint = torch.load(
                 model_fn, map_location=lambda storage, loc: storage)
+            n_ch_in = checkpoint['state_dict']['shared.0.conv.weight'].shape[1]
             model = VGGlikeMTL(checkpoint['tasks'],
-                               checkpoint['branch_at'])
+                               checkpoint['branch_at'],
+                               n_ch_in=n_ch_in)
             model.load_state_dict(checkpoint['state_dict'])
         else:  # Random feature case
             model = VGGlikeMTL(['tag'], "null")
@@ -84,24 +86,34 @@ class FeatureExtractor(object):
         if is_gpu:
             scaler.cuda()
             model.cuda()
+        else:
+            scaler.to('cpu')
+            scaler.to('cpu')
 
         return scaler, model
 
     @staticmethod
-    def _preprocess_mel(y, is_gpu):
+    def _preprocess_mel(y, is_gpu, config=None):
         """"""
-        # zero padding
-        if y.shape[1] % cfg.N_STEPS != 0:
-            margin = cfg.N_STEPS - y.shape[1] % cfg.N_STEPS
-            y = np.concatenate(
-                [y, np.zeros((cfg.N_CH, margin, cfg.N_BINS))],
-                axis=1
-            ).astype(np.float32)  # (2, t, 128)
+        if config is None:
+            config = dict(n_steps=cfg.N_STEPS,
+                          n_ch=cfg.N_CH,
+                          n_bins=cfg.n_bins)
+        else:
+            config['n_steps'] = cfg.N_STEPS
 
-        # re-organize it to have (N, 2, 216, 128)
+        # zero padding
+        if y.shape[1] % config['n_steps'] != 0:
+            margin = config['n_steps'] - y.shape[1] % config['n_steps']
+            y = np.concatenate(
+                [y, np.zeros((config['n_ch'], margin, config['n_bins']))],
+                axis=1
+            ).astype(np.float32)  # (n_ch, t, n_bins)
+
+        # re-organize it to have (M, n_ch, t, n_bins)
         Y = np.concatenate(
-            [y[j].reshape(-1, cfg.N_STEPS, cfg.N_BINS)[:, None]
-             for j in range(cfg.N_CH)],
+            [y[j].reshape(-1, config['n_steps'], config['n_bins'])[:, None]
+             for j in range(config['n_ch'])],
             axis=1
         )
         Y = Variable(torch.from_numpy(Y).float())
@@ -167,17 +179,17 @@ class FeatureExtractor(object):
 
 class EasyFeatureExtractor:
     """ High-Level wrapper class for easier feature extraction """
-    def __init__(self, model_fn, scaler_fn='./data/sclr_dbmel.dat.gz',
-                 is_gpu=False):
+    def __init__(self, model_fn, config_fn, is_gpu=False):
         """
         Args:
             model_fn (str): path to the target VGGlikeMTL model parameter (.pth)
-            scaler_fn (str): path to the mel-spectrum scaler (.dat.gz)
+            config_fn (str): path to the model training config file (.json)
             is_gpu (bool): flag for the gpu computation
         """
         self.is_gpu = is_gpu
+        self.config = config
         self.scaler, self.model = FeatureExtractor._load_model(
-            model_fn, scaler_fn, self.is_gpu)
+            model_fn, config['scaler_fn'], self.is_gpu)
         self.melspec = partial(librosa.feature.melspectrogram,
                                n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN)
 
@@ -207,7 +219,7 @@ class EasyFeatureExtractor:
         z = FeatureExtractor._extract(self.scaler, self.model, X, self.is_gpu)
 
         # output
-        return z 
+        return z
 
     def _check_n_fix_audio(self, audio):
         """

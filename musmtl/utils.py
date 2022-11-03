@@ -18,12 +18,12 @@ from .config import Config as cfg
 
 def load_pickle(fn):
     """ python2 -> python3 loadable pickle loader
-    
+
     Args:
         fn (str): path to pickle file
 
     ref: https://blog.modest-destiny.com/posts/python-2-and-3-compatible-pickle-save-and-load/
-    """ 
+    """
     try:
         with open(fn, 'rb') as f:
             data = pkl.load(f)
@@ -45,10 +45,13 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         new_fn = join(dirname(filename), new_basename)
         shutil.copyfile(filename, new_fn)
 
-        
+
 def extract_mel(fn, verbose=False):
     """"""
-    y, sr = librosa.load(fn, sr=cfg.SR, mono=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        y, sr = librosa.load(fn, sr=cfg.SR, mono=False)
+
     if y.ndim == 1:
         if verbose:
             print('[Warning] "{}" only has 1 channel. '.format(fn) +
@@ -57,7 +60,7 @@ def extract_mel(fn, verbose=False):
 
     Y = librosa.power_to_db(np.array([
         librosa.feature.melspectrogram(
-            ch, sr=sr, n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN).T
+            y=ch, sr=sr, n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN).T
         for ch in y
     ])).astype(np.float32)  # (2, t, 128)
 
@@ -66,7 +69,7 @@ def extract_mel(fn, verbose=False):
 
 def parmap(func, iterable, n_workers=2, verbose=False):
     """ Simple Implementation for Parallel Map """
-    
+
     if n_workers == 1:
         if verbose:
             iterable = tqdm(iterable, total=len(iterable), ncols=80)

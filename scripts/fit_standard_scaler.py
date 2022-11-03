@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 from tqdm import tqdm
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.externals import joblib
+import joblib
 
 # setup arg parser
 parser = argparse.ArgumentParser()
@@ -26,7 +26,8 @@ print('2. Training a scaler...')
 scaler = StandardScaler()
 for fn in tqdm(fns, ncols=80):
     X = np.load(fn)  # (1, 2, t, 128)
-    scaler.partial_fit(X.reshape(-1, 128))
-    
+    X = X.reshape(-1, X.shape[-1])
+    scaler.partial_fit(X)
+
 print('3. Saving...')
 joblib.dump(scaler, args.outfn)

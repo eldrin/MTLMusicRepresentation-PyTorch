@@ -1,11 +1,11 @@
 import os
+# TODO: clean these stuffs with `threadpool_limits`
 # os.environ['OMP_NUM_THREADS'] = "1"
 os.environ['MKL_NUM_THREADS'] = "2"
 os.environ['NUMBA_NUM_THREADS'] = "1"
 
 from os.path import join, dirname, basename
 import sys
-import glob
 from functools import partial
 import time
 
@@ -237,7 +237,7 @@ def run(feature_fn, task, out_root, n_cv=5, standardize=False, grid_search=False
 
                     pipes = [('{}_{:d}'.format(name, i), Pipe())
                              for i, Pipe in enumerate(Models)]
-                    # build search 
+                    # build search
                     param_search_setup = [
                         {
                             '{}__{}'.format(pipes[-1][0], param_name): param_range

@@ -7,7 +7,7 @@ import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
-from .data import MSDMelDataset, ToVariable
+from .data import MSDMelDataset, MSDAudioDataset, MSDMelHDFDataset, ToVariable
 from .train import Trainer
 from .config import Config as cfg
 
@@ -20,27 +20,12 @@ class Experiment:
             config_fn (str): path to experiment configuration file
         """
         self.config = config
-        if self.config['save_location'] == 'localhost':
-            if not exists(abspath(self.config['out_root'])):
-                os.mkdir(abspath(self.config['out_root']))
-
-        # load datasets
-        print('Load training dataset')
-        self.train_dataset = MSDMelDataset(
-            config['mel_root'], config['train_melpaths_fn'],
-            config['label_fn'], on_mem=config['on_mem'],
-            transform=ToVariable())
-
-        if ('valid_melpaths_fn' in config and
-                os.path.exists(config['valid_melpaths_fn'])):
-
-            print('Load validation dataset')
-            self.valid_dataset = MSDMelDataset(
-                config['mel_root'], config['valid_melpaths_fn'],
-                config['label_fn'], on_mem=config['on_mem'],
-                transform=ToVariable())
-        else:
-            self.valid_dataset = None
+        self.train_dataset = self._init_dataset(config['dataset'],
+                                                split='train')
+        if ('valid_tids_fn' in config['dataset'] and
+                os.path.exists(config['dataset']['valid_tids_fn'])):
+            self.valid_dataset = self._init_dataset(config['dataset'],
+                                                    split='valid')
 
         # override some setup if provided
         lr = config['learn_rate'] if 'learn_rate' in config else cfg.LEARN_RATE
@@ -49,6 +34,21 @@ class Experiment:
         l2 = config['l2'] if 'l2' in config else cfg.L2
         save_loc = config['save_location'] if 'save_location' in config else cfg.SAVE_LOC
         n_outs = config['n_outs'] if 'n_outs' in config else cfg.N_OUTS
+        n_workers = config['num_workers'] if 'num_workers' in config else cfg.N_WORKERS
+
+        if 'n_ch' in config:
+            if config['n_ch'] == 'infer':
+                n_ch_in = self._infer_n_input_ch()
+            elif isinstance(config['n_ch'], int):
+                n_ch_in = config['n_ch']
+            else:
+                raise ValueError('[ERROR] `n_ch` should be an integer or string `infer`')
+        else:
+            n_ch_in = cfg.N_CH  # default
+
+        if self.config['save_location'] == 'localhost':
+            if not exists(abspath(self.config['out_root'])):
+                os.mkdir(abspath(self.config['out_root']))
 
         # setup custom trainer class with global setup
         self.Trainer = partial(
@@ -59,11 +59,53 @@ class Experiment:
             batch_sz = bsz, l2 = l2,
             save_location = save_loc,
             n_outs = n_outs,
+            n_ch_in = n_ch_in,
             save_every = config['save_every'],
             scaler_fn = config['scaler_fn'],
             out_root = config['out_root'],
             is_gpu = config['is_gpu'],
+            num_workers = n_workers
         )
+
+    def _init_dataset(self, data_config, split='train'):
+        """
+        split \in {'train', 'valid'}
+        """
+        assert split in {'train', 'valid'}
+
+        # load datasets
+        print(f'Load {split} dataset')
+        if data_config['type'] == 'npy':
+            dataset = MSDMelDataset(
+                data_config['mel_root'], data_config[f'{split}_tids_fn'],
+                data_config['label_fn'], on_mem=data_config['on_mem'],
+                ignore_intersection=data_config['ignore_label_intersection'],
+                transform=ToVariable())
+
+        elif data_config['type'] == 'hdf':
+            dataset = MSDMelHDFDataset(
+                data_config['hdf_fn'], data_config[f'{split}_tids_fn'],
+                data_config['label_fn'],
+                ignore_intersection=data_config['ignore_label_intersection'],
+                transform=ToVariable())
+
+        elif data_config['type'] == 'audio':
+            dataset = MSDAudioDataset(
+                data_config['audio_root'], data_config[f'{split}_tids_fn'],
+                data_config['tid2path_fn'], data_config['label_fn'],
+                ignore_intersection=data_config['ignore_label_intersection'],
+                device='cpu',
+                transform=ToVariable())
+
+        return dataset
+
+    def _infer_n_input_ch(self):
+        """
+        """
+        sample_ = self.train_dataset[(0, 'self_')]
+        x_ = sample_['mel'][0]
+        n_ch_in = x_.shape[1]
+        return n_ch_in
 
     def run(self):
         """"""

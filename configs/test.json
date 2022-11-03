@@ -2,6 +2,8 @@
     "name":"test_self",
     "train_melpaths_fn":"./data/train_fns.txt",
     "valid_melpaths_fn":"./data/valid_fns.txt",
+    "mel_root":"/data/MSD/mel",
+    "save_location":"localhost",
     "label_fn":"/mnt/msd/meta_data/ALL.pkl",
     "scaler_fn":"./data/sclr_dbmel.dat.gz",
     "on_mem":false,

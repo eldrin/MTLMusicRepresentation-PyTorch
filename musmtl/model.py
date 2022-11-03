@@ -2,7 +2,6 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 
 VALID_TASKS = {
@@ -20,7 +19,7 @@ VALID_FUSION = {
 class VGGlikeMTL(nn.Module):
     """ VGG-like architecture for Multi-Task Learning
     """
-    def __init__(self, tasks, branch_at, n_outs=50):
+    def __init__(self, tasks, branch_at, n_outs=50, n_ch_in=2):
         """
         Args:
             tasks (list of str): involved tasks
@@ -33,6 +32,7 @@ class VGGlikeMTL(nn.Module):
 
         # build network
         self.n_outs = n_outs
+        self.n_ch_in = n_ch_in
         self._build_net(tasks, branch_at)
         self.tasks = tasks
         self.branch_at = branch_at
@@ -63,7 +63,9 @@ class VGGlikeMTL(nn.Module):
     def _build_shared(self, branch_at):
         """"""
         if branch_at != 'null':
-            shared = [ConvBlock2d(2, 16, 5, conv_stride=(2, 1), pool_size=2)]
+            shared = [ConvBlock2d(self.n_ch_in, 16, 5,
+                                  conv_stride=(2, 1),
+                                  pool_size=2)]
             if branch_at == '2':
                 return shared  # (batch_sz, 16, 54, 64)
 
@@ -101,7 +103,7 @@ class VGGlikeMTL(nn.Module):
         branch = []
         if branch_at != 'fc':
             if branch_at == 'null': # MSS-CR (null) : full branching
-                branch.append(ConvBlock2d(2, 16, 5, 
+                branch.append(ConvBlock2d(self.n_ch_in, 16, 5,
                                           conv_stride=(2, 1),
                                           pool_size=2))
                 branch.append(ConvBlock2d(16, 32, 3))

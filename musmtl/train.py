@@ -1,39 +1,36 @@
 import os
-from os.path import join, basename, dirname
+from os.path import join
 import subprocess
 from collections import OrderedDict
 from itertools import chain
-import uuid
 
 # TEMPORARY SOLUTION
 import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
-import numpy as np
-from sklearn.externals import joblib
+import joblib
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
-from prefetch_generator import BackgroundGenerator, background
 
 from .model import VGGlikeMTL, SpecStandardScaler
-from .data import MSDMelDataset, ToVariable
+from .data import MTLBatchSampler
 from .optimizer import MultipleOptimizerDict
 from .utils import save_checkpoint
 
 from tqdm import trange, tqdm
-import fire
 
 
 class Trainer(object):
     """ Model trainer """
     def __init__(self, train_dataset, tasks, branch_at, scaler_fn,
-                 out_root, n_outs=50, in_fn=None, learn_rate=0.0001, n_epoches=100,
-                 batch_sz=48, l2=1e-6, valid_dataset=None,
+                 out_root, n_outs=50, n_ch_in=2, in_fn=None, learn_rate=0.0001, n_epoches=100,
+                 batch_sz=48, l2=1e-6, valid_dataset=None, num_workers=1,
                  save_every=None, save_location='localhost',
                  report_every=100, is_gpu=True, name=None, **kwargs):
         """
@@ -47,12 +44,14 @@ class Trainer(object):
                             containing mean / scale of mel spectrums
             out_root (str): output path for checkpoints
             n_outs (int): number of output dimension at terminal layer
+            n_ch_in (int): number of input channels (default 2)
             in_fn (str, optional): checkpoint fn (not implemented yet)
             learn_rate (float): learning rate for Adam optimizer
             n_epochs (int): number of epoches for training
             batch_sz (int): number of samplers per batch
             l2 (float): coefficient for L2 regularization on weight
             valid_dataset (MSDMelDataset, optional): validation dataset instance
+            num_workers (int): set the number of separate processes for torch.utils.data.DataLoader
             on_mem (bool): flag whether the data loaded on memory or not
             report_every (int): frequency for evaluation
             save_every (int): frequency for checkpoint dumping
@@ -65,12 +64,14 @@ class Trainer(object):
         self.tasks = tasks
         self.branch_at = branch_at
         self.n_outs = n_outs
+        self.n_ch_in = n_ch_in
 
         self.learn_rate = learn_rate
         self.batch_sz = batch_sz
         self.n_epoches = n_epoches
         self.l2 = l2
 
+        self.num_workers = num_workers
         self.report_every = report_every
         self.save_every = save_every
         self.save_location = save_location
@@ -101,16 +102,24 @@ class Trainer(object):
 
         # initialize the dataset
         self.train_dataset = train_dataset
+        batch_sampler = MTLBatchSampler(len(self.train_dataset), self.tasks,
+                                        batch_size=self.batch_sz)
+        self.train_loader = DataLoader(dataset=self.train_dataset,
+                                       batch_sampler=batch_sampler,
+                                       num_workers=self.num_workers)
         if valid_dataset is not None:
             self.valid_dataset = valid_dataset
-
-        self.n_batches = int(len(self.train_dataset.tids) / self.batch_sz) + 1
-        self.n_batches *= len(tasks)
+            batch_sampler = MTLBatchSampler(len(self.valid_dataset), self.tasks,
+                                            batch_size=self.batch_sz)
+            self.valid_loader = DataLoader(dataset=self.valid_dataset,
+                                           batch_sampler=batch_sampler,
+                                           num_workers=self.num_workers)
 
         # initialize the models
         sclr = joblib.load(scaler_fn)
         self.scaler = SpecStandardScaler(sclr.mean_, sclr.scale_)
-        self.model = VGGlikeMTL(tasks, branch_at, n_outs=n_outs)
+        self.model = VGGlikeMTL(tasks, branch_at,
+                                n_outs=n_outs, n_ch_in=n_ch_in)
 
         # multi-gpu
         if torch.cuda.device_count() > 1:
@@ -177,32 +186,39 @@ class Trainer(object):
                     (self.epoch % self.save_every == 0)):
                     self._validate()
 
-                for X, y, task in self._iter_batches():
-                    # pre-processing
-                    X, y = self._preprocess(X, y, task)
+                # for X, y, task in self._iter_batches():
+                with tqdm(total=len(self.train_loader), ncols=80) as prog:
+                    for samples in self.train_loader:
+                        X, y, task = samples['mel'], samples['label'], samples['task']
+                        task = samples['task'][0]  # samples in batch always is homogenious
 
-                    # update the model
-                    self.opt.zero_grad()
-                    y_pred = self.model(X, task)
-                    l = self.criterion(
-                        F.log_softmax(y_pred, dim=1), y)
-                    l.backward()
-                    self.opt.step(['shared', task])
-                    self.iters += 1
+                        # pre-processing
+                        X, y = self._preprocess(X, y, task)
 
-                    # runtime checkpoint
-                    if (self.iters % self.report_every == 0 and
-                            hasattr(self, 'valid_dataset')):
+                        # update the model
+                        self.opt.zero_grad()
+                        y_pred = self.model(X, task)
+                        l = self.criterion(
+                            F.log_softmax(y_pred, dim=1), y)
+                        l.backward()
+                        self.opt.step(['shared', task])
+                        self.iters += 1
 
-                        # training log
-                        self.logger.add_scalar(
-                            'tloss/{}'.format(task), l.item(), self.iters)
+                        # runtime checkpoint
+                        if (self.iters % self.report_every == 0 and
+                                hasattr(self, 'valid_dataset')):
 
-                        # validation
-                        if self.save_every is not None:
-                            self._validate(save=False)
-                        else:
-                            self._validate()
+                            # training log
+                            self.logger.add_scalar(
+                                'tloss/{}'.format(task), l.item(), self.iters)
+
+                            # validation
+                            if self.save_every is not None:
+                                self._validate(save=False)
+                            else:
+                                self._validate()
+
+                        prog.update()
 
         except KeyboardInterrupt:
             print('[Warning] User stopped the training!')
@@ -251,38 +267,25 @@ class Trainer(object):
             X = self.scaler(X)
             return X, y
 
-    @background(max_prefetch=5)
-    def _iter_batches(self):
-        """"""
-        for fn in trange(self.n_batches, ncols=80):
-            # pick task & indices
-            task = np.random.choice(self.tasks)
-            idx = np.random.choice(
-                len(self.train_dataset.tids), self.batch_sz, False)
-            # draw data
-            X, y = self._draw_samples(idx, task, 'train')
-            yield X, y, task
-
     def _validate(self, save=True):
         """"""
         self.model.eval()  # toggle to evaluation mode
 
         # validation
-        for task in self.tasks:
-            idx = np.random.choice(
-                len(self.valid_dataset.tids), self.batch_sz, False)
+        # draw data
+        sample = next(iter(self.valid_loader))
+        X, y = sample['mel'], sample['label']
+        task = sample['task'][0]
+        X, y = self._preprocess(X, y, task)
 
-            # draw data
-            X, y = self._draw_samples(idx, task, 'valid')
-            X, y = self._preprocess(X, y, task)
+        # forward
+        y_pred = self.model(X, task)
+        l = self.criterion(F.log_softmax(y_pred, dim=1), y)
 
-            # forward
-            y_pred = self.model(X, task)
-            l = self.criterion(F.log_softmax(y_pred, dim=1), y)
+        # logging
+        self.logger.add_scalar('vloss/{}'.format(task),
+                               l.item(), self.iters)
 
-            # logging
-            self.logger.add_scalar('vloss/{}'.format(task),
-                                   l.item(), self.iters)
         if save:
             if self.save_every is not None:
                 out_fn = ('{}_checkpoint_it{:d}.pth.tar'
@@ -311,21 +314,21 @@ class Trainer(object):
             else:
                 # TODO: check if the desitnation is accessible and valid?
                 # (currently assuming it's always accessible and valid)
-                    save_checkpoint(
-                        {'iters': self.iters,
-                         'tasks': self.tasks,
-                         'n_outs': self.n_outs,
-                         'branch_at': self.branch_at,
-                         'scaler_fn': self.scaler_fn,
-                         'state_dict': model_state,
-                         'optimizer': self.opt.state_dict()},
-                        False,  # we don't care best model
-                        out_fn
-                    )
-                    # send the file to the destination using scp
-                    dest = join(self.save_location, self.name) + '/'
-                    subprocess.call(['rsync', '-r', out_fn, dest])
-                    os.remove(out_fn)
+                save_checkpoint(
+                    {'iters': self.iters,
+                     'tasks': self.tasks,
+                     'n_outs': self.n_outs,
+                     'branch_at': self.branch_at,
+                     'scaler_fn': self.scaler_fn,
+                     'state_dict': model_state,
+                     'optimizer': self.opt.state_dict()},
+                    False,  # we don't care best model
+                    out_fn
+                )
+                # send the file to the destination using scp
+                dest = join(self.save_location, self.name) + '/'
+                subprocess.call(['rsync', '-r', out_fn, dest])
+                os.remove(out_fn)
 
         # toggle to training mode
         self.model.train()

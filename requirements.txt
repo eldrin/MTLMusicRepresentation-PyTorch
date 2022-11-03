@@ -1,0 +1,12 @@
+numpy
+pandas
+scipy
+h5py
+sklearn
+joblib
+librosa
+--extra-index-url https://download.pytorch.org/whl/cu116
+torch
+tensorboardx
+implicit
+tqdm
