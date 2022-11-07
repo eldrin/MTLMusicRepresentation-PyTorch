@@ -2,6 +2,10 @@ import os
 import json
 
 from functools import partial
+import argparse
+import importlib.resources as importlib_resources
+from pathlib import Path
+import logging
 
 # TEMPORARY SOLUTION
 import warnings
@@ -16,16 +20,20 @@ import torch
 from torch.autograd import Variable
 from tqdm import tqdm
 
-from .model import VGGlikeMTL, SpecStandardScaler
+from .model import VGGlikeMTL, SpecStandardScaler, DEFAULT_SCALER_REF
 from .utils import extract_mel
 from .config import Config as cfg
+
+
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 
 
 def _generate_mels(fns):
     for fn in tqdm(fns, ncols=80):
         try:
             if os.path.splitext(fn)[-1] == '.npy':
-                y = np.load(fn)[0]
+                y = np.load(fn, mmap_mode='r')
             else:
                 y = extract_mel(fn)
         except IOError as e:
@@ -51,20 +59,20 @@ def mfcc_baseline(X):
 
 
 class FeatureExtractor(object):
-    def __init__(self, target_audios, is_gpu=False):
+    def __init__(self, target_audios, device=False):
         """
         Args:
             target_audios (str): path to file listing target audio files (.txt)
         """
         # build & initialize model
-        self.is_gpu = is_gpu
+        self.device = device
 
         # get the target melspec list
         with open(target_audios, 'r') as f:
             self.mel_fns = [ll.replace('\n', '') for ll in f.readlines()]
 
     @staticmethod
-    def _load_model(model_fn, scaler_fn, is_gpu):
+    def _load_model(model_fn, scaler_fn, device):
         """"""
         if model_fn is not None:
             # load checkpoint to the model
@@ -83,22 +91,19 @@ class FeatureExtractor(object):
         sclr_ = joblib.load(scaler_fn)
         scaler = SpecStandardScaler(sclr_.mean_, sclr_.scale_)
 
-        if is_gpu:
-            scaler.cuda()
-            model.cuda()
-        else:
-            scaler.to('cpu')
-            scaler.to('cpu')
+        # send the models to computing device
+        scaler.to(device)
+        model.to(device)
 
         return scaler, model
 
     @staticmethod
-    def _preprocess_mel(y, is_gpu, config=None):
+    def _preprocess_mel(y, device, config=None):
         """"""
         if config is None:
             config = dict(n_steps=cfg.N_STEPS,
                           n_ch=cfg.N_CH,
-                          n_bins=cfg.n_bins)
+                          n_bins=cfg.N_BINS)
         else:
             config['n_steps'] = cfg.N_STEPS
 
@@ -116,30 +121,31 @@ class FeatureExtractor(object):
              for j in range(config['n_ch'])],
             axis=1
         )
-        Y = Variable(torch.from_numpy(Y).float())
-
-        if is_gpu:
-            Y = Y.cuda()
+        Y = Variable(torch.from_numpy(Y).float()).to(device)
 
         return Y
 
     @staticmethod
-    def _extract(scaler, model, Y, is_gpu):
+    def _extract(scaler, model, Y, device):
         # scaling & extraction
         Y = scaler(Y)
-        Y = torch.cat(
-            [model.feature(Y, task) for task in model.tasks],
-            dim=1
-        )
+        # Y = torch.cat(
+        #     [model.feature(Y, task) for task in model.tasks],
+        #     dim=1
+        # )
+        #
+        # # send to CPU / numpy.ndarray
+        # Y = Y.data.detach().cpu().numpy()
+        #
+        # # concat of mean / std
+        # z = np.r_[Y.mean(axis=0), Y.std(axis=0)]
 
-        if is_gpu:
-            Y = Y.data.cpu().numpy()
-        else:
-            Y = Y.data.numpy()
-
-        # concat of mean / std
-        z = np.r_[Y.mean(axis=0), Y.std(axis=0)]
-        return z
+        Z = {}
+        for task in model.tasks:
+            y = model.feature(Y, task)
+            z = torch.cat([y.mean(dim=0), y.std(dim=0)])
+            Z[task] = z.detach().cpu().numpy()
+        return Z
 
     def run(self, model_fns, scaler_fn):
         """
@@ -152,16 +158,17 @@ class FeatureExtractor(object):
         X = _generate_mels(self.mel_fns)
 
         for model_fn in model_fns:
-            # initiate output containor
-            output = []
-
             # spawn model
             if model_fn == 'random':
-                scaler, model = self._load_model(None, scaler_fn, self.is_gpu)
+                scaler, model = self._load_model(None, scaler_fn, self.device)
             elif model_fn == 'mfcc':
                 pass
             else:
-                scaler, model = self._load_model(model_fn, scaler_fn, self.is_gpu)
+                scaler, model = self._load_model(model_fn, scaler_fn, self.device)
+
+            # initiate output containor
+            output = {task:[] for task in model.tasks}
+            processed_fns = []
 
             # process
             for fn, x in X:
@@ -170,11 +177,20 @@ class FeatureExtractor(object):
                     output.append(mfcc_baseline(x[None]))
 
                 else:
-                    Y = self._preprocess_mel(x, self.is_gpu)
-                    z = self._extract(scaler, model, Y, self.is_gpu)
-                    output.append(z)
+                    Y = self._preprocess_mel(x, self.device)
+                    z = self._extract(scaler, model, Y, self.device)
+                    for task in model.tasks:
+                        output[task].append(z[task])
 
-            yield np.array(output)  # (n x (d x m))
+                # register processed filename into the container
+                processed_fns.append(Path(fn).name)
+
+            # post process
+            output = {
+                task: np.array(features)
+                for task, features in output.items()
+            }
+            yield processed_fns, output  # (n x (d x m))
 
 
 class EasyFeatureExtractor:
@@ -244,3 +260,88 @@ def load_model(model_fn, is_gpu=False):
     # load the checkpoint
     # load the state_dict to the model
     # output loaded model
+    pass
+
+
+def parse_arguments() -> argparse.Namespace:
+    """
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model_checkpoints",
+                        help=('path to file listing model checkpoint '
+                              'files (.txt)'))
+    parser.add_argument("target_audios",
+                        help='path to file listing target audio files (.txt)')
+    parser.add_argument("out_root",
+                        help='filepath for the output')
+    parser.add_argument("--scaler", type=str, default=None,
+                        help=("filename of the melspectrogram scaler. "
+                              "If not given, it uses the default scaler "
+                              "which trained on about 200k music preview "
+                              "of million song dataset."))
+    parser.add_argument('--device', type=str, default='cpu',
+                        help="select compute device for the extraction.")
+    parser.add_argument('--verbose', default=True,
+                        action=argparse.BooleanOptionalAction,
+                        help="set verbosity")
+    return parser.parse_args()
+
+
+def main():
+    """
+    """
+    args = parse_arguments()
+
+    if args.verbose:
+        logging.getLogger(__name__).setLevel(logging.INFO)
+
+    # device sanity check
+    if (args.device != 'cpu') and (not args.device.startswith('cuda')):
+        raise ValueError('[ERROR] wrong device name is given!')
+
+    if args.device.startswith('cuda') and (not torch.cuda.is_available()):
+        raise ValueError('[ERROR] GPU is not available in this system! '
+                         'the procedure will be computed on CPU...')
+
+    # parse some path objects and names
+    outroot = Path(args.out_root)
+    if not outroot.exists():
+        logger.info('Output path does not exist! making the directory...')
+        outroot.mkdir(parents=True, exist_ok=True)
+    in_name = Path(args.target_audios).name.split('_')[0]
+
+    # parse model paths
+    model_fns = []
+    with open(args.model_checkpoints) as f:
+        for line in f:
+            fn = line.replace('\n', '')
+
+            # check input / output path is existing and valid
+            if fn != 'mfcc' and fn != 'random' and not os.path.exists(fn):
+                raise IOError('[ERROR] model checkpoint not exists!')
+
+            model_fns.append(fn)
+
+    # init worker and run!
+    logger.info('Initiating worker...')
+    ext = FeatureExtractor(args.target_audios, args.device)
+
+    # fetch the scaler file object
+    logger.info('Processing...')
+    with importlib_resources.as_file(DEFAULT_SCALER_REF) \
+            if args.scaler is None else \
+            Path(args.scaler) as fp:
+
+        for (succssed, feature), fn in zip(ext.run(model_fns, fp), model_fns):
+
+            # get exp id
+            ix = Path(fn).stem.split('_')[0]
+            out_fn = outroot / ix / f"{in_name}"
+            out_fn.parent.mkdir(parents=True, exist_ok=True)
+
+            logger.info('Saving {}...'.format(ix))
+            np.savez(out_fn, fns=succssed, **feature)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

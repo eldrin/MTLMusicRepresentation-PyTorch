@@ -35,8 +35,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--train-ratio', type=float, default=0.8,
                         help='determines the ratio of training samples.')
     parser.add_argument('--test-ratio', type=float, default=0.5,
-                        help=('ratio of test samples "WITHIN THE NON-TRAINING"'
-                              '"SAMPLES". For instance if the `train-ratio` is '
+                        help=('ratio of test samples "WITHIN THE NON-TRAINING '
+                              'SAMPLES". For instance if the `train-ratio` is '
                               'set as 0.5 and `test-ratio` is set as 0.5, the '
                               'ratio of test samples for the entire dataset '
                               'becomes 0.25. Similarly, it will be 0.1 if '

@@ -108,7 +108,18 @@ def readme():
 
 def requirements():
     with open('requirements.txt') as f:
-        return [line.strip() for line in f]
+        extra_deps = []
+        requires = []
+        for line in f:
+            if line.startswith('--'):
+                extra_deps.append(
+                    line
+                    .replace('\n', '')
+                    .replace('--extra-index-url ', '')
+                )
+            else:
+                requires.append(line.strip())
+    return requires, extra_deps
 
 
 setup(name=NAME,
@@ -127,17 +138,20 @@ setup(name=NAME,
       author_email='j.h.kim@tudelft.nl',
       license='MIT',
       packages=find_packages(),
-      # package_data={'gloves': ['data/*.json']},
-      install_requires=requirements(),
+      install_requires=requirements()[0],
+      dependency_links=requirements()[1],
       setup_requires=["setuptools>=18.0", "Cython>=0.24"],
       extras_require={
           'dev': [],
       },
       ext_modules=define_extensions(),
       cmdclass={"build_ext": build_ext},
-      # entry_points = {
-      #     'console_scripts': [
-      #     ],
-      # },
+      entry_points = {
+          'console_scripts': [
+              'mtlextract=musmtl.tool:main',
+              'mtltrain=musmtl.experiment:main',
+              'mtlutils=musmtl.utils:main'
+          ],
+      },
       test_suite='tests',
       zip_safe=False)

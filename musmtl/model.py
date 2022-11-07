@@ -1,9 +1,16 @@
 from collections import OrderedDict
+import importlib.resources as importlib_resources
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
+DEFAULT_SCALER_REF = (
+    importlib_resources.files('musmtl') / 'data' / 'sclr_dbmel3.dat.gz'
+)
+
+
+# TODO: this should be generalized at this moment
 VALID_TASKS = {
     'self_', 'bpm', 'year', 'tag', 'taste', 'cdr_tag', 'lyrics', 'artist'
 }

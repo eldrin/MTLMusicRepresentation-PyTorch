@@ -1,6 +1,9 @@
 import os
 from os.path import exists, abspath
+from pathlib import Path
 from functools import partial
+import json
+import argparse
 
 # TEMPORARY SOLUTION
 import warnings
@@ -117,3 +120,29 @@ class Experiment:
             # instantiate trainer & run
             trainer = self.Trainer(**setup)
             trainer.fit()
+
+
+def parse_arguments():
+    """
+    """
+    # setup arg parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", help='configuration (.json) path')
+    return parser.parse_args()
+
+
+def main():
+    """
+    """
+    args = parse_arguments()
+
+    # load config file
+    with Path(args.config).open('r') as fp:
+        conf = json.load(open(args.config))
+
+    # instantiate experiment & run
+    Experiment(conf).run()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
