@@ -152,11 +152,6 @@ class FeatureExtractor(object):
         Args:
             model_fns (list of str): list of path to model checkpoint file (.pth.gz)
         """
-        # load all melspecs
-        # TODO: this approach is memory heavy, but fast. better way?
-        # X = list(_generate_mels(self.mel_fns))
-        X = _generate_mels(self.mel_fns)
-
         for model_fn in model_fns:
             # spawn model
             if model_fn == 'random':
@@ -171,7 +166,7 @@ class FeatureExtractor(object):
             processed_fns = []
 
             # process
-            for fn, x in X:
+            for fn, x in _generate_mels(self.mel_fns):
                 if model_fn == 'mfcc':
                     # extract MFCC baseline
                     output.append(mfcc_baseline(x[None]))
