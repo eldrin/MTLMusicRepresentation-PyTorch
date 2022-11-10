@@ -303,7 +303,7 @@ def main():
     if not outroot.exists():
         logger.info('Output path does not exist! making the directory...')
         outroot.mkdir(parents=True, exist_ok=True)
-    in_name = Path(args.target_audios).name.split('_')[0]
+    in_name = Path(args.target_audios).stem
 
     # parse model paths
     model_fns = []
@@ -330,7 +330,7 @@ def main():
         for (succssed, feature), fn in zip(ext.run(model_fns, fp), model_fns):
 
             # get exp id
-            ix = Path(fn).stem.split('_')[0]
+            ix = Path(fn).stem
             out_fn = outroot / ix / f"{in_name}"
             out_fn.parent.mkdir(parents=True, exist_ok=True)
 
