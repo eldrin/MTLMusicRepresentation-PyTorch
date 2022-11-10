@@ -180,7 +180,7 @@ class ConvBlock2d(nn.Module):
         self.conv = nn.Conv2d(in_channel, out_channel,
                               conv_kernel, stride=conv_stride,
                               padding=conv_kernel // 2)
-        torch.nn.init.xavier_uniform(self.conv.weight)  # Glorot uniform
+        torch.nn.init.xavier_uniform_(self.conv.weight)  # Glorot uniform
         self.bn = nn.BatchNorm2d(out_channel)
 
     def forward(self, X):
@@ -229,5 +229,5 @@ class SpecStandardScaler(nn.Module):
 def linear_with_glorot_uniform(f_in, f_out):
     """"""
     lin = nn.Linear(f_in, f_out)
-    torch.nn.init.xavier_uniform(lin.weight)
+    torch.nn.init.xavier_uniform_(lin.weight)
     return lin

@@ -9,7 +9,8 @@ import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
-import joblib
+# import joblib
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -116,8 +117,8 @@ class Trainer(object):
                                            num_workers=self.num_workers)
 
         # initialize the models
-        sclr = joblib.load(scaler_fn)
-        self.scaler = SpecStandardScaler(sclr.mean_, sclr.scale_)
+        with np.load(scaler_fn) as npf:
+            self.scaler = SpecStandardScaler(npf['mean'], npf['sd'])
         self.model = VGGlikeMTL(tasks, branch_at,
                                 n_outs=n_outs, n_ch_in=n_ch_in)
 

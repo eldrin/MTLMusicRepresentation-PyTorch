@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 import numpy as np
-import joblib
+# import joblib
 import librosa
 
 import torch
@@ -88,8 +88,9 @@ class FeatureExtractor(object):
         model.eval()
 
         # initialize scaler
-        sclr_ = joblib.load(scaler_fn)
-        scaler = SpecStandardScaler(sclr_.mean_, sclr_.scale_)
+        # sclr_ = joblib.load(scaler_fn)
+        with np.load(scaler_fn) as npf:
+            scaler = SpecStandardScaler(npf['mean'], npf['sd'])
 
         # send the models to computing device
         scaler.to(device)
