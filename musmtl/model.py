@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 DEFAULT_SCALER_REF = (
-    importlib_resources.files('musmtl') / 'data' / 'sclr_dbmel3.dat.gz'
+    importlib_resources.files('musmtl') / 'data' / 'mel_standard_scaler_params.npz'
 )
 
 
