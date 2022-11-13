@@ -196,6 +196,7 @@ def make_hdf(
     random_seed: int = 2022,
     train_ratio: float = 0.8,
     test_ratio: float = 0.5,
+    drop_chan_dim: bool = False,
     verbose: bool = False
 ) -> None:
     """ convert individual mel spec files (.npy) into single HDF db file.
@@ -218,6 +219,10 @@ def make_hdf(
                     for the entire dataset becomes 0.25. Similarly, it will
                     be 0.1 if the `train_ratio` is set as 0.8 and `test_ratio`
                     is set as same (0.5).
+        drop_chan_dim: if set True, the procedure remove the preceding channel
+                       axis by: 1) drop if the audio originally mono, or 2) take
+                       the average on the axis if there are more than two
+                       channels.
         verbose: set verbosity
     """
     # set random seed
@@ -282,7 +287,11 @@ def make_hdf(
         else:
             total_len = n_total_frames
 
-        data = hf.create_dataset('data', shape=(n_ch, total_len, dim), dtype=np.float32)
+        if drop_chan_dim:
+            data = hf.create_dataset('data', shape=(total_len, dim), dtype=np.float32)
+        else:
+            data = hf.create_dataset('data', shape=(n_ch, total_len, dim), dtype=np.float32)
+
         with tqdm(total=len(cands), ncols=80, disable=not verbose) as prog:
             for i, fn in enumerate(cands):
                 x = np.load(fn)
@@ -294,7 +303,11 @@ def make_hdf(
                     i0, i1 = indptr[-1], indptr[-1] + length
                     indptr.append(i1)
 
-                data[:, i0:i1] = x
+                if drop_chan_dim:
+                    data[i0:i1] = x.mean(0) if x.shape[0] > 1 else x[0]
+                else:
+                    data[:, i0:i1] = x
+
                 prog.update()
 
         # write data
@@ -380,6 +393,12 @@ def parse_args() -> argparse.Namespace:
                              'becomes 0.25. Similarly, it will be 0.1 if '
                              'the `train-ratio` is set as 0.8 and `test-ratio` '
                              'is set as same (0.5).'))
+    mkhdf.add_argument('--drop-chan-dim', default=False,
+                       action=argparse.BooleanOptionalAction,
+                       help=("if set True, the procedure remove the preceding "
+                             "channel axis by: 1) drop if the audio originally "
+                             "mono, or 2) take the average on the axis if "
+                             "there are more than two channels."))
 
     return parser.parse_args()
 
@@ -422,6 +441,7 @@ def main():
             args.random_seed,
             args.train_ratio,
             args.test_ratio,
+            args.drop_chan_dim,
             args.verbose
         )
 
