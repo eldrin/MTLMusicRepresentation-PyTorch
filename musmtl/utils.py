@@ -58,25 +58,28 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         shutil.copyfile(filename, new_fn)
 
 
-def extract_mel(fn, verbose=False):
+def extract_mel(fn, mono=False, verbose=False):
     """"""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        y, sr = librosa.load(fn, sr=cfg.SR, mono=False)
+        y, sr = librosa.load(fn, sr=cfg.SR, mono=mono)
 
-    if y.ndim == 1:
-        if verbose:
-            print('[Warning] "{}" only has 1 channel. '.format(fn) +
-                  'making psuedo 2-channels...')
-        y = np.vstack([y, y])
+    if not mono:
+        if y.ndim == 1:
+            if verbose:
+                print('[Warning] "{}" only has 1 channel. '.format(fn) +
+                      'making psuedo 2-channels...')
+            y = np.vstack([y, y])
+    else:
+        y = y[None]
 
     Y = librosa.power_to_db(np.array([
         librosa.feature.melspectrogram(
             y=ch, sr=sr, n_fft=cfg.N_FFT, hop_length=cfg.HOP_LEN).T
         for ch in y
-    ])).astype(np.float32)  # (2, t, 128)
+    ])).astype(np.float32)  # (2, t, 128) or (1, t, 128) if mono
 
-    return Y  # (2, t, 128)
+    return Y  # (2, t, 128) or (1, t, 128) if mono
 
 
 def parmap(func, iterable, n_workers=2, verbose=False):
@@ -100,14 +103,14 @@ def parmap(func, iterable, n_workers=2, verbose=False):
 
 
 def __ext_mel(
-    input_args: tuple[str, str, bool],
+    input_args: tuple[str, str, bool, bool],
     file_id: Optional[str] = None,
 ) -> None:
     """ simple helper function to compute the melspec parallelly.
 
     Args:
-        input_args: tuple of filenamd, output path and overwrite flag.
-                    it'll be parsed.
+        input_args: tuple of filenamd, output path, overwrite flag, and mono
+                    floag. it'll be parsed into four input arguments.
         file_id: if given, it is used as the stem of outputing filename
 
     Raises:
@@ -115,7 +118,7 @@ def __ext_mel(
                     2 characters.
     """
     # parse input argument
-    fn, out_path, overwrite = input_args
+    fn, out_path, overwrite, mono = input_args
 
     stem = file_id if file_id is not None else Path(fn).stem
 
@@ -133,7 +136,7 @@ def __ext_mel(
         return
 
     try:
-        Y = extract_mel(fn)
+        Y = extract_mel(fn, mono=mono)
         np.save(out_fn.as_posix(), Y)
     except Exception as e:
         print(stem, e)
@@ -336,6 +339,12 @@ def parse_args() -> argparse.Namespace:
     melspec.add_argument('--overwrite', default=True,
                          action=argparse.BooleanOptionalAction,
                          help="set if the melspectrum is overwritten if exists.")
+    melspec.add_argument('--mono', default=False,
+                         action=argparse.BooleanOptionalAction,
+                         help=("set the procedure extract mel spectrum from "
+                               "mono channel audio. if the original audio is "
+                               "stereo it's forcefully converted into mono "
+                               "mono channel audio."))
 
     # `makehdf` sub command ====================================================
     mkhdf = subparsers.add_parser(
@@ -394,7 +403,8 @@ def main():
             cands = [
                 (line.replace('\n', ''),
                  args.path,
-                 args.overwrite)
+                 args.overwrite,
+                 args.mono)
                 for line in fp
             ]
 
